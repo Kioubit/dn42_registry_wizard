@@ -1,0 +1,21 @@
+[package]
+name = "registry_wizard"
+version = "0.2.8"
+edition = "2021"
+
+[dependencies]
+roa_wizard = { git="https://github.com/Kioubit/roa_wizard.git", tag = "0.1.8" }
+cidr-utils = "0.6.1"
+serde = { version = "1.0.210", features = ["derive", "rc"] }
+serde_json = "1.0.128"
+# Pending removal of remote-related dependencies
+bgpkit-parser = "0.10.10"
+rayon = "1.10.0"
+clap = "4.5.17"
+
+[profile.release]
+opt-level = 3       # Enable all optimizations
+lto = true          # Enable link-time optimizationr
+codegen-units = 1   # Reduce number of codegen units to increase optimizations
+panic = 'abort'     # Abort on panic
+strip = true        # Strip symbols from binary
