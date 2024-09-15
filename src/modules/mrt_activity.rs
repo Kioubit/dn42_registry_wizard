@@ -1,4 +1,4 @@
-use crate::modules::object_reader::read_registry_objects;
+use crate::modules::object_reader::{filter_objects_source, read_registry_objects, RegistryObject};
 use crate::modules::util;
 use crate::modules::util::BoxResult;
 use bgpkit_parser::{BgpkitParser, MrtRecord};
@@ -21,41 +21,51 @@ pub fn output(registry_root: String, mrt_root: String, max_inactive_secs: u64, w
         return Ok(output);
     }
 
-    let route_objects = read_registry_objects(registry_root, "data/route/", false)?;
+    let mut route_objects_v4 = read_registry_objects(registry_root.clone(), "data/route/", false)?;
+    filter_objects_source(&mut route_objects_v4, "DN42".to_string());
+    let mut route_objects_v6 = read_registry_objects(registry_root, "data/route6/", false)?;
+    filter_objects_source(&mut route_objects_v6, "DN42".to_string());
 
-    for route_object in route_objects {
-        let empty_vec: Vec<String> = vec![];
-        let unknown_source = "UNKNOWN".to_string();
+    route_objects_v4.retain(|o| route_object_is_active(o, &active_asn));
+    route_objects_v6.retain(|o| route_object_is_active(o, &active_asn));
 
-        let source = route_object.key_value.get("source").unwrap_or(&empty_vec).first().unwrap_or(&unknown_source);
-        if source != "DN42" {
-            continue;
-        }
+    for object in route_objects_v4 {
+        output.push_str(&format!("data/route/{}\n", object.filename));
+        output.push_str(&format!("data/inetnum/{}\n", object.filename));
+    }
 
-        let origin_asn_vec = route_object.key_value.get("origin").unwrap_or(&empty_vec);
-        let origin_asn_vec_u32: Vec<u32> = origin_asn_vec.iter().filter_map(|x|
-            x.strip_prefix("AS")?.parse::<u32>().ok()
-        ).collect();
-        if origin_asn_vec_u32.is_empty() {
-            continue;
-        }
-
-        let mut found = false;
-
-        for origin_asn in &origin_asn_vec_u32 {
-            if active_asn.contains_key(origin_asn) {
-                // If we found at least one active origin ASN
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            output.push_str(&format!("data/route/{}\n", route_object.filename));
-            output.push_str(&format!("data/inetnum/{}\n", route_object.filename));
-        }
+    for object in route_objects_v6 {
+        output.push_str(&format!("data/route6/{}\n", object.filename));
+        output.push_str(&format!("data/inet6num/{}\n", object.filename));
     }
 
     Ok(output)
+}
+
+fn route_object_is_active(route_object: &RegistryObject, active_asn: &HashMap<u32, u64>) -> bool {
+    let empty_vec: Vec<String> = vec![];
+
+    let origin_asn_vec = route_object.key_value.get("origin").unwrap_or(&empty_vec);
+    let origin_asn_vec_u32: Vec<u32> = origin_asn_vec.iter().filter_map(|x|
+        x.strip_prefix("AS")?.parse::<u32>().ok()
+    ).collect();
+    if origin_asn_vec_u32.is_empty() {
+        return false;
+    }
+
+    let mut found = false;
+
+    for origin_asn in &origin_asn_vec_u32 {
+        if active_asn.contains_key(origin_asn) {
+            // If we found at least one active origin ASN
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        return false;
+    }
+    true
 }
 
 fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<HashMap<u32, u64>> {

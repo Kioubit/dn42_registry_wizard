@@ -48,3 +48,7 @@ pub fn read_registry_objects(registry_root: String, sub_path : &str, enumerate_o
 
     Ok(objects)
 }
+
+pub fn filter_objects_source(objects: &mut Vec<RegistryObject>, source: String) {
+    objects.retain(|obj| obj.key_value.get("source").is_some_and(|x| x.first() == Some(&source)));
+}
