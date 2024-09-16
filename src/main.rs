@@ -80,7 +80,7 @@ fn main() {
                                  Command::new("v6").about("IPv6"),
                              ]),
                          Command::new("mrt_activity")
-                             .about("Output last seen time for active ASNs in MRT dumps. List registry resources that are unused.")
+                             .about("Output last seen time for active ASNs in MRT RIB dumps. List registry resources that are unused.")
                              .args([Arg::new("mrt_root")
                                  .help("MRT data directory")
                                  .required(true)

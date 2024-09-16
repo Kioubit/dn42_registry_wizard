@@ -1,13 +1,13 @@
 use crate::modules::object_reader::{filter_objects_source, read_registry_objects, RegistryObject};
 use crate::modules::util;
 use crate::modules::util::BoxResult;
+use bgpkit_parser::models::{AsPath, Asn, AttributeValue, MrtMessage};
 use bgpkit_parser::{BgpkitParser, MrtRecord};
 use std::collections::HashMap;
 use std::ops::Sub;
 use std::sync::mpsc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{thread, time};
-use bgpkit_parser::models::{AsPath, Asn, AttributeValue, MrtMessage};
 
 pub fn output(registry_root: String, mrt_root: String, max_inactive_secs: u64, with_registry: bool) -> BoxResult<String> {
     let mut output = String::new();
@@ -78,14 +78,7 @@ fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<Ha
 
     eprintln!("Cutoff time: {}", cutoff_time);
 
-    let mut paths = util::walk_dir(mrt_root, 10)?;
-    paths.retain(|path| {
-        let file_name_str = path.file_name().unwrap_or_default().to_str().unwrap_or_default();
-        if !file_name_str.ends_with("mrt.bz2") {
-            return false;
-        }
-        true
-    });
+    let paths = util::walk_dir(mrt_root, 10)?;
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(10)
@@ -128,8 +121,6 @@ fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<Ha
         });
     });
 
-    // Retain only active ASNs
-    result_map.retain(|_, t| cutoff_time == 0 || *t >= cutoff_time);
 
     Ok(result_map)
 }
@@ -137,10 +128,13 @@ fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<Ha
 fn analyze_mrt_file(path: &str, x: &mut HashMap<u32, u64>, cutoff_time: u32) -> BoxResult<()> {
     eprintln!("Parsing {}", path);
     let parser = BgpkitParser::new(path)?;
+    let mut had_record = false;
     for record in parser.into_record_iter() {
+        had_record = true;
         let timestamp = record.common_header.timestamp;
         if timestamp < cutoff_time && cutoff_time != 0 {
-            continue;
+            // Each RIB dump file only contains records from the same timestamp
+            break
         }
         let asn_list = record_to_origin_asn_list(record);
         for asn in asn_list {
@@ -152,6 +146,9 @@ fn analyze_mrt_file(path: &str, x: &mut HashMap<u32, u64>, cutoff_time: u32) -> 
                 x.insert(asn, timestamp as u64);
             }
         }
+    }
+    if !had_record {
+        panic!("No records found in MRT file: {}", path)
     }
     eprintln!("Completed {}", path);
     Ok(())
@@ -199,7 +196,10 @@ fn record_to_origin_asn_list(record: MrtRecord) -> Vec<u32> {
                 }
             }
         }
-        _ => {}
+        MrtMessage::TableDumpV2Message(bgpkit_parser::models::TableDumpV2Message::PeerIndexTable(_)) => {}
+        _ => {
+            panic!("Unsupported MRT subtype")
+        }
     }
     let asn_vec: Vec<u32> = origin_asn_list.into_iter()
         .map(|x| x.to_u32()).collect();

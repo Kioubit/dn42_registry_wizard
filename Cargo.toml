@@ -1,15 +1,16 @@
 [package]
 name = "registry_wizard"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 
 [dependencies]
-roa_wizard = { git="https://github.com/Kioubit/roa_wizard.git", tag = "0.1.8" }
+roa_wizard = { git = "https://github.com/Kioubit/roa_wizard.git", tag = "0.1.8" }
 cidr-utils = "0.6.1"
 serde = { version = "1.0.210", features = ["derive", "rc"] }
 serde_json = "1.0.128"
 # Pending removal of remote-related dependencies
-bgpkit-parser = "0.10.10"
+# bgpkit-parser = "0.10.10"
+bgpkit-parser = { git = "https://github.com/bgpkit/bgpkit-parser.git", rev = "74eb14514089edcbf3d1ba7b8d7707a3ea664300", default-features = false, features = ["parser"] }
 rayon = "1.10.0"
 clap = "4.5.17"
 
