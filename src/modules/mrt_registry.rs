@@ -77,6 +77,9 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
     }
     
 
+    inactive_mnt_list.sort_unstable();
+    inactive_mnt_list.dedup();
+    
     let output = inactive_mnt_list.join(",");
     Ok(output)
 }
