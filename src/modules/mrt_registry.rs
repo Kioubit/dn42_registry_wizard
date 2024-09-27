@@ -15,6 +15,72 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
 
     active_asn.retain( |_, t| *t >= cutoff_time );
 
+    let mut inactive_mnt_list: Vec<String> = Vec::new();
+
+    let mut aut_nums = read_registry_objects(registry_root.clone(), "data/aut-num/", false)?;
+    filter_objects_source(&mut aut_nums, String::from("DN42"));
+
+    let mut inactive_aut_nums: Vec<RegistryObject> = Vec::new();
+    let mut active_aut_nums: Vec<RegistryObject> = Vec::new();
+
+    for obj in aut_nums {
+        let mnt_list = obj.key_value.get("mnt-by");
+        if mnt_list.is_none() {
+            active_aut_nums.push(obj);
+            continue;
+        };
+        if mnt_list.unwrap().contains(&String::from("DN42-MNT")) {
+            active_aut_nums.push(obj);
+            continue;
+        }
+        let asn_str = obj.filename.strip_prefix("AS");
+        if asn_str.is_none() {
+            active_aut_nums.push(obj);
+            continue;
+        };
+        let asn_u32 = asn_str.unwrap().parse::<u32>();
+        if asn_u32.is_err() {
+            active_aut_nums.push(obj);
+            continue;
+        };
+        
+        if active_asn.contains_key(&asn_u32.unwrap()) {
+            active_aut_nums.push(obj);
+        } else {
+            inactive_aut_nums.push(obj);
+        }
+    }
+
+
+
+    for aut_num in inactive_aut_nums {
+        let asn_path = &format!("data/aut-num/{}", aut_num.filename);
+        if get_last_git_activity(&registry_root, asn_path)? >= cutoff_time {
+            continue;
+        }
+
+        if let Some(mnt_by_list) = aut_num.key_value.get("mnt-by") {
+            inactive_mnt_list.append(&mut mnt_by_list.clone());
+        } else {
+            continue;
+        }
+
+        output.push_str(asn_path);
+        output.push('\n');
+    }
+    
+    for active_aut_num in active_aut_nums {
+        let mnt_list = active_aut_num.key_value.get("mnt-by");
+        if mnt_list.is_none() {
+            continue;
+        }
+        for active_mnt in mnt_list.unwrap() {
+            if let Some(index) = inactive_mnt_list.iter().position(|val| val == active_mnt) {
+                inactive_mnt_list.swap_remove(index);
+            }
+        }
+    }
+    
     let mut route_objects_v4 = read_registry_objects(registry_root.clone(), "data/route/", false)?;
     filter_objects_source(&mut route_objects_v4, String::from("DN42"));
     let mut route_objects_v6 = read_registry_objects(registry_root.clone(), "data/route6/", false)?;
@@ -23,61 +89,52 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
     route_objects_v4.retain(|o| !route_object_is_active(o, &active_asn));
     route_objects_v6.retain(|o| !route_object_is_active(o, &active_asn));
 
+
+    let mut inetnum_objects_v4 = read_registry_objects(registry_root.clone(), "data/inetnum/", false)?;
+    filter_objects_source(&mut route_objects_v4, String::from("DN42"));
+    let mut inetnum_objects_v6 = read_registry_objects(registry_root.clone(), "data/inet6num/", false)?;
+    filter_objects_source(&mut route_objects_v6, String::from("DN42"));
+
+    inetnum_objects_v4.retain(|o| !object_is_active(o, &inactive_mnt_list));
+    inetnum_objects_v6.retain(|o| !object_is_active(o, &inactive_mnt_list));
+
+
     for object in route_objects_v4 {
         let route_path = &format!("data/route/{}", object.filename);
-        if get_last_git_activity(&registry_root, route_path)? >= cutoff_time {
-            continue;
-        };
-        let inetnum_path = &format!("data/inetnum/{}", object.filename);
-        if get_last_git_activity(&registry_root, inetnum_path)? >= cutoff_time {
-            continue;
-        };
-        
+        //if get_last_git_activity(&registry_root, route_path)? >= cutoff_time {
+        //    continue;
+        //};
         output.push_str(route_path);
         output.push('\n');
+    }
+
+    for object in inetnum_objects_v4 {
+        let inetnum_path = &format!("data/inetnum/{}", object.filename);
+        //if get_last_git_activity(&registry_root, inetnum_path).unwrap_or(cutoff_time) >= cutoff_time {
+        //    continue;
+        //};
         output.push_str(inetnum_path);
         output.push('\n');
     }
 
     for object in route_objects_v6 {
         let route_path = &format!("data/route6/{}", object.filename);
-        if get_last_git_activity(&registry_root, route_path)? >= cutoff_time {
-            continue;
-        };
-        let inetnum_path = &format!("data/inet6num/{}", object.filename);
-        if get_last_git_activity(&registry_root, inetnum_path)? >= cutoff_time {
-            continue;
-        };
-
+        //if get_last_git_activity(&registry_root, route_path)? >= cutoff_time {
+        //    continue;
+        //};
         output.push_str(route_path);
         output.push('\n');
+    }
+
+    for object in inetnum_objects_v6 {
+        let inetnum_path = &format!("data/inet6num/{}", object.filename);
+        //if get_last_git_activity(&registry_root, inetnum_path)? >= cutoff_time {
+        //    continue;
+        //};
         output.push_str(inetnum_path);
         output.push('\n');
     }
 
-    let mut aut_nums = read_registry_objects(registry_root.clone(), "data/aut-num/", false)?;
-    filter_objects_source(&mut aut_nums, String::from("DN42"));
-    aut_nums.retain(|obj| {
-        let mnt_list = obj.key_value.get("mnt-by");
-        if mnt_list.is_none() {return false};
-        if mnt_list.unwrap().contains(&String::from("DN42-MNT")) {return false;}
-        let asn_str = obj.filename.strip_prefix("AS");
-        if asn_str.is_none() {return false};
-        let asn_u32 = asn_str.unwrap().parse::<u32>();
-        if asn_u32.is_err() {return false};
-        // Retain only when the ASN are not present in the active asn vec
-        !active_asn.contains_key(&asn_u32.unwrap())
-    });
-
-    for aut_num in aut_nums {
-        let asn_path = &format!("data/aut-num/{}", aut_num.filename);
-        if get_last_git_activity(&registry_root, asn_path)? >= cutoff_time {
-            continue;
-        }
-        
-        output.push_str(asn_path);
-        output.push('\n');
-    }
 
     Ok(output)
 }
@@ -118,6 +175,24 @@ fn route_object_is_active(route_object: &RegistryObject, active_asn: &HashMap<u3
     for origin_asn in &origin_asn_vec_u32 {
         if active_asn.contains_key(origin_asn) {
             // If we found at least one active origin ASN
+            found = true;
+            break;
+        }
+    }
+
+    found
+}
+
+fn object_is_active(object: &RegistryObject, inactive_mnt_list: &Vec<String> ) -> bool {
+    let empty_vec: Vec<String> = vec![];
+
+    let mnt_list = object.key_value.get("mnt-by").unwrap_or(&empty_vec);
+
+    let mut found = false;
+
+    for mnt in mnt_list{
+        if !inactive_mnt_list.contains(mnt) {
+            // If we found at least one active MNT
             found = true;
             break;
         }
