@@ -4,7 +4,6 @@ use crate::modules::util::BoxResult;
 use bgpkit_parser::models::{AsPath, Asn, AttributeValue, MrtMessage};
 use bgpkit_parser::{BgpkitParser, MrtRecord};
 use std::collections::HashMap;
-use std::ops::Sub;
 use std::sync::mpsc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{thread, time};
@@ -22,9 +21,9 @@ pub fn output(registry_root: String, mrt_root: String, max_inactive_secs: u64, w
     }
 
     let mut route_objects_v4 = read_registry_objects(registry_root.clone(), "data/route/", false)?;
-    filter_objects_source(&mut route_objects_v4, "DN42".to_string());
-    let mut route_objects_v6 = read_registry_objects(registry_root, "data/route6/", false)?;
-    filter_objects_source(&mut route_objects_v6, "DN42".to_string());
+    filter_objects_source(&mut route_objects_v4, String::from("DN42"));
+    let mut route_objects_v6 = read_registry_objects(registry_root.clone(), "data/route6/", false)?;
+    filter_objects_source(&mut route_objects_v6, String::from("DN42"));
 
     route_objects_v4.retain(|o| route_object_is_active(o, &active_asn));
     route_objects_v6.retain(|o| route_object_is_active(o, &active_asn));
@@ -37,6 +36,24 @@ pub fn output(registry_root: String, mrt_root: String, max_inactive_secs: u64, w
     for object in route_objects_v6 {
         output.push_str(&format!("data/route6/{}\n", object.filename));
         output.push_str(&format!("data/inet6num/{}\n", object.filename));
+    }
+
+    let mut aut_nums = read_registry_objects(registry_root, "data/aut-num/", false)?;
+    filter_objects_source(&mut aut_nums, String::from("DN42"));
+    aut_nums.retain(|obj| {
+        let mnt_list = obj.key_value.get("mnt-by");
+        if mnt_list.is_none() {return false};
+        if mnt_list.unwrap().contains(&String::from("DN42-MNT")) {return false;}
+        let asn_str = obj.filename.strip_prefix("AS");
+        if asn_str.is_none() {return false};
+        let asn_u32 = asn_str.unwrap().parse::<u32>();
+        if asn_u32.is_err() {return false};
+        // Retain only when the ASN are not present in the active asn vec
+        !active_asn.contains_key(&asn_u32.unwrap())
+    });
+
+    for aut_num in aut_nums {
+        output.push_str(&format!("data/aut-num/{}\n", aut_num.filename));
     }
 
     Ok(output)
@@ -72,8 +89,9 @@ fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<Ha
     let cutoff_time = if max_inactive_secs == 0 {
         0
     } else {
-        let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        time.sub(time::Duration::new(max_inactive_secs, 0)).as_secs()
+        let mut time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        time -= time::Duration::new(max_inactive_secs, 0);
+        time.as_secs()
     };
 
     eprintln!("Cutoff time: {}", cutoff_time);
