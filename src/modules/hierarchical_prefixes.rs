@@ -18,7 +18,7 @@ struct HierarchicalPrefix<> {
 
 #[derive(Serialize)]
 #[serde(remote = "IpCidr")]
-struct IpCidrDef (
+struct IpCidrDef(
     #[serde(getter = "IpCidr::to_string")]
     String
 );
@@ -72,6 +72,6 @@ pub fn output(registry_root: String, v4: bool) -> util::BoxResult<String> {
     Ok(j)
 }
 
-fn is_in_subnet(target : IpCidr, test : IpCidr) -> bool {
+fn is_in_subnet(target: IpCidr, test: IpCidr) -> bool {
     target.contains(&test.first_address()) && target.contains(&test.last_address())
 }

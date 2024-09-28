@@ -1,6 +1,7 @@
-use clap::{Arg, ArgAction, Command};
+use clap::{Arg, ArgAction, ArgGroup, Command};
 use roa_wizard_lib::{generate_bird, generate_json};
 use std::process::exit;
+use crate::modules::util::EitherOr;
 
 mod modules;
 
@@ -19,107 +20,120 @@ fn main() {
                 .help("path to registry root")
                 .required(true)
                 .index(1)
-        )
-        .subcommands([
-                         Command::new("roa")
-                             .about("ROA file generation (various formats)")
-                             .subcommand_required(true)
-                             .subcommands([
-                                 Command::new("v4").about("bird2 v4 format"),
-                                 Command::new("v6").about("bird2 v6 format"),
-                                 Command::new("json").about("JSON format for use with RPKI"),
-                             ]).arg(
-                             Arg::new("strict")
-                                 .short('s')
-                                 .long("strict")
-                                 .action(ArgAction::SetTrue)
-                                 .help("Abort program if an error was found in a file")
-                         ),
-                         Command::new("dns")
-                             .about("DNS zone file and trust anchor generation (for use with PowerDNS)")
-                             .subcommand_required(true)
-                             .subcommands([
-                                 Command::new("zones").about("Output zone files")
-                                     .arg(
-                                         Arg::new("authoritative_servers")
-                                             .help("List of authoritative servers")
-                                             .required(true)
-                                             .num_args(1..)
-                                     ),
-                                 Command::new("zones-legacy")
-                                     .about("Output legacy zone files")
-                                     .arg(
-                                         Arg::new("authoritative_servers")
-                                             .help("List of authoritative servers")
-                                             .required(true)
-                                             .num_args(1..)
-                                     ),
-                                 Command::new("tas").about("Output trust anchors"),
-                             ]),
-                         Command::new("inetnumMetadata")
-                             .about("Inetnum metadata output (JSON format)")
-                             .subcommand_required(true)
-                             .subcommands([
-                                 Command::new("v4").about("IPv4"),
-                                 Command::new("v6").about("IPv6"),
-                             ]),
-                         Command::new("objectMetadata")
-                             .about("Object metadata output (JSON format)")
-                             .arg(
-                                 Arg::new("object_type")
-                                     .required(true)
-                                     .help("object type such as 'mntner', 'domain' etc. \
+        ).subcommands(
+        [
+            Command::new("roa")
+                .about("ROA file generation (various formats)")
+                .subcommand_required(true)
+                .subcommands([
+                    Command::new("v4").about("bird2 v4 format"),
+                    Command::new("v6").about("bird2 v6 format"),
+                    Command::new("json").about("JSON format for use with RPKI"),
+                ]).arg(
+                Arg::new("strict")
+                    .short('s')
+                    .long("strict")
+                    .action(ArgAction::SetTrue)
+                    .help("Abort program if an error was found in a file")
+            ),
+            Command::new("dns")
+                .about("DNS zone file and trust anchor generation (for use with PowerDNS)")
+                .subcommand_required(true)
+                .subcommands([
+                    Command::new("zones").about("Output zone files")
+                        .arg(
+                            Arg::new("authoritative_servers")
+                                .help("List of default authoritative servers (comma separated)")
+                                .required(true)
+                                .num_args(1..)
+                        ),
+                    Command::new("zones-legacy")
+                        .about("Output legacy zone files")
+                        .arg(
+                            Arg::new("authoritative_servers")
+                                .help("List of default authoritative servers (comma separated)")
+                                .required(true)
+                                .num_args(1..)
+                        ),
+                    Command::new("tas").about("Output trust anchors"),
+                ]),
+            Command::new("inetnumMetadata")
+                .about("Inetnum metadata output (JSON format)")
+                .subcommand_required(true)
+                .subcommands([
+                    Command::new("v4").about("IPv4"),
+                    Command::new("v6").about("IPv6"),
+                ]),
+            Command::new("objectMetadata")
+                .about("Object metadata output (JSON format)")
+                .arg(
+                    Arg::new("object_type")
+                        .required(true)
+                        .help("object type such as 'mntner', 'domain' etc. \
                                      (Based on the directories in the registry)")
-                             )
-                         ,
-                         Command::new("hierarchicalPrefixes")
-                             .about("Hierarchical prefix tree output (JSON format)")
-                             .subcommand_required(true)
-                             .subcommands([
-                                 Command::new("v4").about("IPv4"),
-                                 Command::new("v6").about("IPv6"),
-                             ]),
-                        Command::new("remove_mnt")
-                            .about("Remove a list of maintainers from the registry")
-                            .arg(
-                                Arg::new("list_file")
-                                .help("Path to a comma-separated list of maintainers to remove")
-                                    .required(true)
-                            )
-                         ,
-                         Command::new("mrt_activity")
-                             .about("Output last seen time for active ASNs in MRT RIB dumps. List registry resources that are unused.")
-                             .subcommand_required(true)
-                             .subcommands([
-                                 Command::new("parse_mrt")
-                                     .about("Parse mrt data files from directory")
-                                     .args([
-                                         Arg::new("mrt_root")
-                                             .help("Path to the MRT data directory")
-                                             .required(true),
-                                         Arg::new("max_inactive_secs")
-                                             .help("Minimum age in seconds for an ASN to be considered inactive")
-                                             .default_value("0")
-                                             .short('i')
-                                             .long("max-inactive-secs")
-                                             .value_parser(clap::value_parser!(u64)),
-                                     ]),
-                                 Command::new("inactive_mnt")
-                                     .about("List inactive MNTs in the registry")
-                                     .args([
-                                         Arg::new("active_json")
-                                             .help("Path to the JSON file containing active ASNs (can be generated by the parse_mrt command)")
-                                             .required(true),
-                                         Arg::new("max_inactive_secs")
-                                             .help("Minimum age in seconds for an ASN to be considered inactive")
-                                             .default_value("0")
-                                             .short('i')
-                                             .long("max-inactive-secs")
-                                             .value_parser(clap::value_parser!(u64)),
-                                     ]),
-                             ])
-                     ],
-        ).get_matches();
+                ),
+            Command::new("hierarchicalPrefixes")
+                .about("Hierarchical prefix tree output (JSON format)")
+                .subcommand_required(true)
+                .subcommands([
+                    Command::new("v4").about("IPv4"),
+                    Command::new("v6").about("IPv6"),
+                ]),
+            Command::new("remove_mnt")
+                .about("Remove a list of maintainers along with all their objects from the registry")
+                .args([
+                    Arg::new("list_file")
+                        .long("list_file")
+                        .short('f')
+                        .help("Path to a file containing a comma-separated list of maintainers to remove"),
+                    Arg::new("list")
+                        .long("list")
+                        .short('i')
+                        .help("comma-separated list of maintainers to remove"),
+                    Arg::new("disable_subgraph_check")
+                        .help("disable check for invalid sub-graphs")
+                        .long("disable_subgraph_check")
+                        .short('l')
+                        .action(ArgAction::SetTrue),
+                ])
+                .group(
+                    ArgGroup::new("input_group")
+                        .args(["list_file", "list"])
+                        .required(true)
+                ),
+            Command::new("mrt_activity")
+                .about("Output last seen time for active ASNs in MRT RIB dumps. List inactive maintainers.")
+                .subcommand_required(true)
+                .subcommands([
+                    Command::new("parse_mrt")
+                        .about("Parse mrt data files from directory")
+                        .args([
+                            Arg::new("mrt_root")
+                                .help("Path to the MRT data directory")
+                                .required(true),
+                            Arg::new("max_inactive_secs")
+                                .help("Minimum age in seconds for an ASN to be considered inactive")
+                                .default_value("0")
+                                .short('i')
+                                .long("max-inactive-secs")
+                                .value_parser(clap::value_parser!(u64)),
+                        ]),
+                    Command::new("inactive_mnt")
+                        .about("List inactive MNTs in the registry")
+                        .args([
+                            Arg::new("active_json")
+                                .help("Path to the JSON file containing active ASNs (can be generated by the parse_mrt command)")
+                                .required(true),
+                            Arg::new("max_inactive_secs")
+                                .help("Minimum age in seconds for an ASN to be considered inactive")
+                                .default_value("0")
+                                .short('i')
+                                .long("max-inactive-secs")
+                                .value_parser(clap::value_parser!(u64)),
+                        ]),
+                ])
+        ],
+    ).get_matches();
 
     let mut base_path = cmd.get_one::<String>("registry_root").unwrap().to_owned();
     if !base_path.ends_with('/') {
@@ -175,7 +189,7 @@ fn main() {
             }
             println!("{}", result.unwrap());
         }
-        Some(("objectMetadata", c )) => {
+        Some(("objectMetadata", c)) => {
             let object_type = c.get_one::<String>("object_type").unwrap();
             let result = modules::object_metadata::output(base_path, object_type.to_owned());
             if result.is_err() {
@@ -199,22 +213,30 @@ fn main() {
                 exit(1);
             }
             println!("{}", result.unwrap());
-        },
+        }
         Some(("remove_mnt", c)) => {
-            let mnt_file = c.get_one::<String>("list_file").unwrap();
-            let result = modules::registry_clean::output(base_path, mnt_file.clone());
+            let input: EitherOr<String, String> = if c.contains_id("list_file") {
+                let mnt_file = c.get_one::<String>("list_file").unwrap();
+                EitherOr::A(mnt_file.clone())
+            } else {
+                let mnt_list = c.get_one::<String>("list").unwrap();
+                EitherOr::B(mnt_list.clone())
+            };
+
+            let disable_subgraph_check = c.get_one::<bool>("disable_subgraph_check").unwrap();
+            let result = modules::registry_clean::output(base_path, input, !disable_subgraph_check);
             if result.is_err() {
                 println!("{}", result.unwrap_err());
                 exit(1);
             }
             println!("{}", result.unwrap());
-        },
+        }
         Some(("mrt_activity", c)) => {
             let result = match c.subcommand() {
                 Some(("parse_mrt", c)) => {
                     let max_inactive_secs = c.get_one::<u64>("max_inactive_secs").unwrap();
                     let mrt_root = c.get_one::<String>("mrt_root").unwrap();
-                     modules::mrt_activity::output(mrt_root.to_owned(), max_inactive_secs.to_owned())
+                    modules::mrt_activity::output(mrt_root.to_owned(), max_inactive_secs.to_owned())
                 }
                 Some(("inactive_mnt", c)) => {
                     let max_inactive_secs = c.get_one::<u64>("max_inactive_secs").unwrap();

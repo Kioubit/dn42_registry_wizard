@@ -17,7 +17,7 @@ fn get_metadata_hashmap(registry_root: String, v4: bool) -> BoxResult<HashMap<St
     let mut result_hash: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
     let objects = read_registry_objects(registry_root, inetnum_path, false)?;
     for object in objects {
-        let inetnum = object.filename.replace('_',"/");
+        let inetnum = object.filename.replace('_', "/");
         result_hash.insert(inetnum, object.key_value);
     }
     Ok(result_hash)

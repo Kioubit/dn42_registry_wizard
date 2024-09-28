@@ -11,7 +11,7 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
     let cutoff_time = crate::modules::mrt_activity::get_cutoff_time(max_inactive_secs);
     eprintln!("Cutoff time: {}", cutoff_time);
 
-    active_asn.retain( |_, t| *t >= cutoff_time );
+    active_asn.retain(|_, t| *t >= cutoff_time);
 
     let mut inactive_mnt_list: Vec<String> = Vec::new();
 
@@ -41,14 +41,13 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
             active_aut_nums.push(obj);
             continue;
         };
-        
+
         if active_asn.contains_key(&asn_u32.unwrap()) {
             active_aut_nums.push(obj);
         } else {
             inactive_aut_nums.push(obj);
         }
     }
-
 
 
     for aut_num in inactive_aut_nums {
@@ -63,7 +62,7 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
             continue;
         }
     }
-    
+
     for active_aut_num in active_aut_nums {
         let mnt_list = active_aut_num.key_value.get("mnt-by");
         if mnt_list.is_none() {
@@ -75,16 +74,16 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
             }
         }
     }
-    
+
 
     inactive_mnt_list.sort_unstable();
     inactive_mnt_list.dedup();
-    
+
     let output = inactive_mnt_list.join(",");
     Ok(output)
 }
 
-fn get_last_git_activity(registry_root: &str, path :&str) -> BoxResult<u64> {
+fn get_last_git_activity(registry_root: &str, path: &str) -> BoxResult<u64> {
     let cmd_output = Command::new("git")
         .arg("log")
         .arg("-1")

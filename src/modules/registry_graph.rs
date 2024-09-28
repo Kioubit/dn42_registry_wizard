@@ -30,8 +30,6 @@ pub(crate) struct LinkedRegistryObject {
 pub(crate) type RegistryGraph = HashMap<String, Vec<Rc<LinkedRegistryObject>>>;
 
 pub(crate) fn create_registry_graph(registry_root: String, registry_schema: &Vec<Schema>) -> BoxResult<RegistryGraph> {
-    eprintln!("------------------------------------------------------");
-
     let mut object_list: HashMap<String, Vec<Rc<LinkedRegistryObject>>> = HashMap::new();
 
     for schema in registry_schema {
@@ -86,7 +84,6 @@ pub(crate) fn create_registry_graph(registry_root: String, registry_schema: &Vec
                         .iter()
                         .find(|x| x.object.filename.to_uppercase() == *object_key_value);
                     if target_object.is_none() {
-                        //eprintln!("INFO: Could not find {} in {}", object_key_value, possible_category);
                         continue;
                     }
 

@@ -1,15 +1,26 @@
 use std::rc::Rc;
 use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkedRegistryObject};
 use crate::modules::util;
-use crate::modules::util::BoxResult;
+use crate::modules::util::{BoxResult, EitherOr};
 
 
-pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
+pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_subgraph_check: bool) -> BoxResult<String> {
+    if !with_subgraph_check {
+        eprintln!("Warning: Subgraph check has been disabled")
+    }
     let weakly_referencing: [&str; 2] = ["as-set", "route-set"];
 
     let mut output = String::new();
-    let mnt_file = util::read_lines(mnt_file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n");
-    let mnt_list = mnt_file.split(",").collect::<Vec<&str>>();
+
+    let mnt_raw_list = match mnt_input {
+        EitherOr::A(file) => {
+            util::read_lines(file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n")
+        }
+        EitherOr::B(list) => {
+            list
+        }
+    };
+    let mnt_list = mnt_raw_list.split(",").collect::<Vec<&str>>();
 
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
 
@@ -49,23 +60,7 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
                 obj.marked.set(false);
             }
 
-            for link in obj.forward_links.borrow().iter()
-                .chain(obj.back_links.borrow().iter()) {
-                let mut found = false;
-                for visited in &visited {
-                    // Do not visit a vertex twice
-                    if Rc::ptr_eq(link, visited) {
-                        found = true;
-                        break;
-                    }
-                }
-                if found {
-                    continue;
-                }
-                // If not visited already
-                visited.push(link.clone());
-                to_visit.push(link.clone());
-            }
+            link_recurse(&obj, &mut visited, &mut to_visit);
         }
     }
 
@@ -92,25 +87,7 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
             obj.deleted.set(true);
             output.push_str(&format!("rm 'data/{}/{}'\n", obj.category, obj.object.filename));
 
-
-            for link in obj.forward_links.borrow().iter()
-                .chain(obj.back_links.borrow().iter()) {
-                let mut found = false;
-                for visited in &visited {
-                    // Do not visit a vertex twice
-                    if Rc::ptr_eq(link, visited) {
-                        found = true;
-                        break;
-                    }
-                }
-                if found {
-                    continue;
-                }
-
-                // If not visited already
-                visited.push(link.clone());
-                to_visit.push(link.clone());
-            }
+            link_recurse(&obj, &mut visited, &mut to_visit);
         }
     }
 
@@ -177,8 +154,7 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
         let required_categories = applicable_schema.unwrap()
             .lookup_keys.iter()
             .filter(|x| x.required)
-            .map(|x| x.lookup_targets.iter())
-            .flatten()
+            .flat_map(|x| x.lookup_targets.iter())
             .collect::<Vec<_>>();
         let mut required_category_missing = false;
         for required_category in required_categories {
@@ -186,9 +162,9 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
                 // We have that category
                 continue;
             }
-            if item.forward_links.borrow().iter()
+            if !item.forward_links.borrow().iter()
                 .filter(|x| !x.deleted.get())
-                .find(|x| x.category == *required_category).is_none() {
+                .any(|x| x.category == *required_category) {
                 // If we don't find a link with the required category
                 required_category_missing = true;
                 break;
@@ -201,6 +177,9 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
         }
     }
 
+    if !with_subgraph_check {
+        return Ok(output);
+    }
 
     // Check for incomplete sub-graphs
     for item in graph.get("mntner").ok_or("can't find mntner category")? {
@@ -224,27 +203,11 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
                 break;
             }
 
-            for link in obj.forward_links.borrow().iter()
-                .chain(obj.back_links.borrow().iter()) {
-                let mut found = false;
-                for visited in &visited {
-                    // Do not visit a vertex twice
-                    if Rc::ptr_eq(link, visited) {
-                        found = true;
-                        break;
-                    }
-                }
-                if found {
-                    continue;
-                }
-                // If not visited already
-                visited.push(link.clone());
-                to_visit.push(link.clone());
-            }
+            link_recurse(&obj, &mut visited, &mut to_visit);
         }
         if !graph_has_asn {
             eprintln!("Warning: Deleting invalid sub-graph for item '{}': {:?}", item.object.filename,
-            visited.iter().map(|x| x.object.filename.clone()).collect::<Vec<_>>());
+                      visited.iter().map(|x| x.object.filename.clone()).collect::<Vec<_>>());
             for visited in &visited.iter()
                 .filter(|x| !x.deleted.get()).collect::<Vec<_>>() {
                 visited.deleted.set(true);
@@ -254,4 +217,26 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
     }
 
     Ok(output)
+}
+
+
+fn link_recurse(obj: &Rc<LinkedRegistryObject>, visited: &mut Vec<Rc<LinkedRegistryObject>>, to_visit: &mut Vec<Rc<LinkedRegistryObject>>) {
+    for link in obj.forward_links.borrow().iter()
+        .chain(obj.back_links.borrow().iter()) {
+        let mut found = false;
+        for visited in &mut *visited {
+            // Do not visit a vertex twice
+            if Rc::ptr_eq(link, visited) {
+                found = true;
+                break;
+            }
+        }
+        if found {
+            continue;
+        }
+
+        // If not visited already
+        visited.push(link.clone());
+        to_visit.push(link.clone());
+    }
 }

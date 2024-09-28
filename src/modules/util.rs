@@ -7,8 +7,16 @@ use std::path::{Path, PathBuf};
 
 pub type BoxResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
+#[derive(Debug, Clone)]
+pub enum EitherOr<X, Z> {
+    A(X),
+    B(Z),
+}
 
-pub fn read_lines<P>(path: P) -> io::Result<io::Lines<io::BufReader<File>>> where P: AsRef<Path> {
+pub fn read_lines<P>(path: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
     let file = File::open(path)?;
     Ok(io::BufReader::new(file).lines())
 }

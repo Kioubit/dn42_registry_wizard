@@ -88,7 +88,7 @@ fn analyze_mrt_file(path: &str, x: &mut HashMap<u32, u64>, cutoff_time: u32) -> 
         let timestamp = record.common_header.timestamp;
         if timestamp < cutoff_time && cutoff_time != 0 {
             // Each RIB dump file only contains records from the same timestamp
-            break
+            break;
         }
         let asn_list = record_to_origin_asn_list(record);
         for asn in asn_list {
