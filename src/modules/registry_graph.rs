@@ -5,15 +5,16 @@ use crate::modules::object_reader::{read_registry_objects, RegistryObject};
 use crate::modules::util::BoxResult;
 
 #[derive(Debug)]
-struct Schema {
-    name: String,
-    lookup_keys: Vec<SchemaLookupKeys>,
+pub(crate) struct Schema {
+    pub name: String,
+    pub lookup_keys: Vec<SchemaField>,
 }
 
 #[derive(Debug)]
-struct SchemaLookupKeys {
-    key: String,
-    lookup_targets: Vec<String>,
+pub(crate) struct SchemaField {
+    pub key: String,
+    pub required: bool,
+    pub lookup_targets: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -28,13 +29,12 @@ pub(crate) struct LinkedRegistryObject {
 
 pub(crate) type RegistryGraph = HashMap<String, Vec<Rc<LinkedRegistryObject>>>;
 
-pub(crate) fn create_registry_graph(registry_root: String) -> BoxResult<RegistryGraph> {
+pub(crate) fn create_registry_graph(registry_root: String, registry_schema: &Vec<Schema>) -> BoxResult<RegistryGraph> {
     eprintln!("------------------------------------------------------");
-    let schemata = parse_schema(registry_root.clone())?;
 
     let mut object_list: HashMap<String, Vec<Rc<LinkedRegistryObject>>> = HashMap::new();
 
-    for schema in &schemata {
+    for schema in registry_schema {
         eprintln!("Reading {:?}", &("data/".to_owned() + &schema.name));
         let objects = read_registry_objects(registry_root.clone(), &("data/".to_owned() + &schema.name), false);
         if objects.is_err() {
@@ -56,73 +56,72 @@ pub(crate) fn create_registry_graph(registry_root: String) -> BoxResult<Registry
 
 
     // Establish links
-    for objects in object_list.values() {
+    for object in object_list.values().flatten() {
         // For each object regardless of category
-        for object in objects {
-            let applicable_schema = schemata.iter().find(|x| x.name == *object.category).unwrap();
-            let schema_links = &applicable_schema.lookup_keys;
-            for schema_link in schema_links {
-                let schema_link_targets = &schema_link.lookup_targets;
-                let schema_key = &schema_link.key;
-                // For each schema_key described in the applicable schema linking via 'lookup=' to a schema_link_target
 
-                // Try to find the schema_key in the object
-                let object_key_values = object.object.key_value.get(schema_key);
-                if object_key_values.is_none() {
-                    // Not found
-                    continue;
-                }
+        let applicable_schema = registry_schema.iter().find(|x| x.name == *object.category).unwrap();
+        let schema_links = &applicable_schema.lookup_keys;
+        for schema_link in schema_links {
+            let schema_link_targets = &schema_link.lookup_targets;
+            let schema_key = &schema_link.key;
+            // For each schema_key described in the applicable schema linking via 'lookup=' to a schema_link_target
 
-                // For each found schema key in the object (for instance mnt-by)
-                for object_key_value in object_key_values.unwrap() {
-                    // Get all 'lookup=' targets
-                    for possible_category in schema_link_targets {
-                        let t_category = &object_list.get(possible_category);
-                        if t_category.is_none() {
-                            eprintln!("Error: unknown category \"{}\"", possible_category);
-                            continue;
-                        }
-                        let target_object = t_category.unwrap()
-                            .iter()
-                            .find(|x| x.object.filename.to_uppercase() == *object_key_value);
-                        if target_object.is_none() {
-                            //eprintln!("INFO: Could not find {} in {}", object_key_value, possible_category);
-                            continue;
-                        }
+            // Try to find the schema_key in the object
+            let object_key_values = object.object.key_value.get(schema_key);
+            if object_key_values.is_none() {
+                // Not found
+                continue;
+            }
 
-
-                        // -------- ADD LINKS TO CURRENT OBJECT --------
-                        if !Rc::ptr_eq(target_object.unwrap(), object) {
-                            let mut current_obj_forward_links = object.forward_links.borrow_mut();
-                            let mut found = false;
-                            for obj in current_obj_forward_links.iter() {
-                                if Rc::ptr_eq(obj, target_object.unwrap()) {
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if !found {
-                                current_obj_forward_links.push(target_object.unwrap().clone());
-                            }
-                        }
-                        // ----------------------------
-
-                        // -------- ADD BACKLINKS TO TARGET OBJECT --------
-                        if !Rc::ptr_eq(object, target_object.unwrap()) {
-                            let mut target_obj_back_links = target_object.unwrap().back_links.borrow_mut();
-                            let mut found = false;
-                            for obj in target_obj_back_links.iter() {
-                                if Rc::ptr_eq(obj, object) {
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if !found {
-                                target_obj_back_links.push(object.clone());
-                            }
-                        }
-                        // ----------------------------
+            // For each found schema key in the object (for instance mnt-by)
+            for object_key_value in object_key_values.unwrap() {
+                // Get all 'lookup=' targets
+                for possible_category in schema_link_targets {
+                    let t_category = &object_list.get(possible_category);
+                    if t_category.is_none() {
+                        eprintln!("Error: unknown category \"{}\"", possible_category);
+                        continue;
                     }
+                    let target_object = t_category.unwrap()
+                        .iter()
+                        .find(|x| x.object.filename.to_uppercase() == *object_key_value);
+                    if target_object.is_none() {
+                        //eprintln!("INFO: Could not find {} in {}", object_key_value, possible_category);
+                        continue;
+                    }
+
+
+                    // -------- ADD LINKS TO CURRENT OBJECT --------
+                    if !Rc::ptr_eq(target_object.unwrap(), object) {
+                        let mut current_obj_forward_links = object.forward_links.borrow_mut();
+                        let mut found = false;
+                        for obj in current_obj_forward_links.iter() {
+                            if Rc::ptr_eq(obj, target_object.unwrap()) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if !found {
+                            current_obj_forward_links.push(target_object.unwrap().clone());
+                        }
+                    }
+                    // ----------------------------
+
+                    // -------- ADD BACKLINKS TO TARGET OBJECT --------
+                    if !Rc::ptr_eq(object, target_object.unwrap()) {
+                        let mut target_obj_back_links = target_object.unwrap().back_links.borrow_mut();
+                        let mut found = false;
+                        for obj in target_obj_back_links.iter() {
+                            if Rc::ptr_eq(obj, object) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if !found {
+                            target_obj_back_links.push(object.clone());
+                        }
+                    }
+                    // ----------------------------
                 }
             }
         }
@@ -132,7 +131,7 @@ pub(crate) fn create_registry_graph(registry_root: String) -> BoxResult<Registry
 }
 
 
-fn parse_schema(registry_root: String) -> BoxResult<Vec<Schema>> {
+pub(crate) fn parse_registry_schema(registry_root: String) -> BoxResult<Vec<Schema>> {
     let mut schemata = Vec::<Schema>::new();
 
     let schema_objects = read_registry_objects(registry_root, "data/schema", false)?;
@@ -162,9 +161,11 @@ fn parse_schema(registry_root: String) -> BoxResult<Vec<Schema>> {
             continue;
         }
 
-        let mut lookup_targets: Vec<SchemaLookupKeys> = Vec::new();
+        let mut lookup_targets: Vec<SchemaField> = Vec::new();
         for key in key_option.unwrap() {
             let key_line = key.split_whitespace().collect::<Vec<&str>>();
+            let required_field = *key_line.get(1).unwrap_or(&"") == "required";
+
             let lookup_key_target_position = key_line.get(3).unwrap_or(&"");
             if !lookup_key_target_position.starts_with("lookup=") {
                 continue;
@@ -175,8 +176,9 @@ fn parse_schema(registry_root: String) -> BoxResult<Vec<Schema>> {
                 .filter(|x| *x != "registry")
                 .map(|x| x.to_string()).collect::<Vec<String>>();
             let lookup_key = key_line.first().unwrap();
-            lookup_targets.push(SchemaLookupKeys {
+            lookup_targets.push(SchemaField {
                 key: lookup_key.to_string(),
+                required: required_field,
                 lookup_targets: lookup_key_targets,
             })
         }

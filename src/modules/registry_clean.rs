@@ -1,17 +1,19 @@
 use std::rc::Rc;
-use crate::modules::registry_graph::{create_registry_graph, LinkedRegistryObject};
+use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkedRegistryObject};
 use crate::modules::util;
 use crate::modules::util::BoxResult;
 
 
 pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
-    let weakly_referencing: [&str; 1] = ["as-set"];
+    let weakly_referencing: [&str; 2] = ["as-set", "route-set"];
 
     let mut output = String::new();
     let mnt_file = util::read_lines(mnt_file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n");
     let mnt_list = mnt_file.split(",").collect::<Vec<&str>>();
 
-    let graph = create_registry_graph(registry_root.to_owned())?;
+    let registry_schema = parse_registry_schema(registry_root.to_owned())?;
+
+    let graph = create_registry_graph(registry_root.to_owned(), &registry_schema)?;
     let mntner = graph.get("mntner").ok_or("mntner not found")?;
 
     // Assuming the registry objects form an undirected graph which is a superset of many disconnected sub-graphs
@@ -113,9 +115,11 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
     }
 
 
+    // Check if weakly referenced objects have dangling references
     for w in weakly_referencing {
+        let empty_vec = vec![];
         let w_list: Vec<_> = graph.get(w)
-            .ok_or("failed to get weakly referenced category from graph")?
+            .unwrap_or(&empty_vec)
             .iter().collect();
         for w_item in w_list {
             let mut found = false;
@@ -152,7 +156,100 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
         }
 
         if !has_links {
+            item.deleted.set(true);
             output.push_str(&format!("rm 'data/{}/{}'\n", item.category, item.object.filename));
+            continue;
+        }
+    }
+
+    // Final pass
+    // Check if all required lookup keys are present (important for weakly referencing objects)
+    for item in graph.values().flatten() {
+        if item.deleted.get() {
+            continue;
+        }
+
+        let applicable_schema = &registry_schema.iter().find(|x| x.name == item.category);
+        if applicable_schema.is_none() {
+            eprintln!("Warning: can't find schema for category '{}'", item.category);
+            continue;
+        }
+        let required_categories = applicable_schema.unwrap()
+            .lookup_keys.iter()
+            .filter(|x| x.required)
+            .map(|x| x.lookup_targets.iter())
+            .flatten()
+            .collect::<Vec<_>>();
+        let mut required_category_missing = false;
+        for required_category in required_categories {
+            if *required_category == item.category {
+                // We have that category
+                continue;
+            }
+            if item.forward_links.borrow().iter()
+                .filter(|x| !x.deleted.get())
+                .find(|x| x.category == *required_category).is_none() {
+                // If we don't find a link with the required category
+                required_category_missing = true;
+                break;
+            }
+        }
+        if required_category_missing {
+            item.deleted.set(true);
+            output.push_str(&format!("rm 'data/{}/{}'\n", item.category, item.object.filename));
+            continue;
+        }
+    }
+
+
+    // Check for incomplete sub-graphs
+    for item in graph.get("mntner").ok_or("can't find mntner category")? {
+        if item.deleted.get() {
+            continue;
+        }
+
+        let mut graph_has_asn = false;
+
+        let mut visited: Vec<Rc<LinkedRegistryObject>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject>> = Vec::new();
+        visited.push(item.clone());
+        to_visit.push(item.clone());
+
+        while let Some(obj) = to_visit.pop() {
+            if obj.deleted.get() {
+                continue;
+            }
+            if obj.category == "aut-num" {
+                graph_has_asn = true;
+                break;
+            }
+
+            for link in obj.forward_links.borrow().iter()
+                .chain(obj.back_links.borrow().iter()) {
+                let mut found = false;
+                for visited in &visited {
+                    // Do not visit a vertex twice
+                    if Rc::ptr_eq(link, visited) {
+                        found = true;
+                        break;
+                    }
+                }
+                if found {
+                    continue;
+                }
+                // If not visited already
+                visited.push(link.clone());
+                to_visit.push(link.clone());
+            }
+        }
+        if !graph_has_asn {
+            eprintln!("Warning: Deleting invalid sub-graph for item '{}': {:?}", item.object.filename,
+            visited.iter().map(|x| x.object.filename.clone()).collect::<Vec<_>>());
+            for visited in &visited.iter()
+                .filter(|x| !x.deleted.get()).collect::<Vec<_>>() {
+                visited.deleted.set(true);
+                output.push_str(&format!("rm 'data/{}/{}'\n", visited.category, visited.object.filename));
+            }
         }
     }
 
