@@ -3,7 +3,10 @@ use crate::modules::registry_graph::{create_registry_graph, LinkedRegistryObject
 use crate::modules::util;
 use crate::modules::util::BoxResult;
 
-pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String>{
+
+pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String> {
+    let weakly_referencing: [&str; 1] = ["as-set"];
+
     let mut output = String::new();
     let mnt_file = util::read_lines(mnt_file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n");
     let mnt_list = mnt_file.split(",").collect::<Vec<&str>>();
@@ -21,13 +24,11 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String>{
         }
     }
 
-    let mut encountered_as_sets : Vec<Rc<LinkedRegistryObject>> = Vec::new();
-
     eprintln!("Iterating through every unmarked mntner");
     // For every *unmarked* vertex
     for mnt in mntner {
         if mnt.marked.get() {
-            continue
+            continue;
         }
         // Recursively follow each path while keeping track of visited vertices
         let mut visited: Vec<Rc<LinkedRegistryObject>> = Vec::new();
@@ -36,7 +37,7 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String>{
         to_visit.push(mnt.clone());
 
         while let Some(obj) = to_visit.pop() {
-            if obj.category == "as-set" {
+            if weakly_referencing.contains(&obj.category.as_str()) {
                 continue;
             }
 
@@ -72,7 +73,7 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String>{
     // Recursively follow each path while keeping track of visited vertices
     for mnt in mntner {
         if !mnt.marked.get() {
-            continue
+            continue;
         }
         let mut visited: Vec<Rc<LinkedRegistryObject>> = Vec::new();
         let mut to_visit: Vec<Rc<LinkedRegistryObject>> = Vec::new();
@@ -80,10 +81,7 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String>{
         to_visit.push(mnt.clone());
 
         while let Some(obj) = to_visit.pop() {
-            if obj.category == "as-set" {
-                if encountered_as_sets.iter().filter(|x| Rc::ptr_eq(*x, &obj)).count() == 0 {
-                    encountered_as_sets.push(obj.clone());
-                }
+            if weakly_referencing.contains(&obj.category.as_str()) {
                 continue;
             }
             if obj.deleted.get() {
@@ -114,38 +112,48 @@ pub fn output(registry_root: String, mnt_file: String) -> BoxResult<String>{
         }
     }
 
-    
-    let deleted_aut_nums : Vec<_> = graph.get("aut-num").ok_or("failed to get aut-num from graph")?
-        .iter()
-        .filter(|x| x.deleted.get()).collect();
-    for as_set in encountered_as_sets {
-        let mut found = false;
-        for reference in as_set.back_links.borrow().iter()
-            .chain(as_set.forward_links.borrow().iter()) {
-            if reference.category == "aut-num" {
-                continue
+
+    for w in weakly_referencing {
+        let w_list: Vec<_> = graph.get(w)
+            .ok_or("failed to get weakly referenced category from graph")?
+            .iter().collect();
+        for w_item in w_list {
+            let mut found = false;
+            for reference in w_item.back_links.borrow().iter()
+                .chain(w_item.forward_links.borrow().iter()) {
+                if reference.deleted.get() {
+                    continue;
+                }
+                found = true;
             }
-            found = true;
-        }
-        if !found {
-            as_set.deleted.set(true);
-            output.push_str(&format!("rm 'data/{}/{}'\n", as_set.category, as_set.object.filename));
-            continue;
-        }
-        
-        let members = as_set.object.key_value.get("members");
-        if members.is_none() {
-            continue;
-        }
-        let members = members.unwrap();
-        for member in members.iter() {
-            if !deleted_aut_nums.iter()
-                .filter(|x| x.object.filename == *member)
-                .collect::<Vec<_>>().is_empty() {
-                output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", member, as_set.category, as_set.object.filename));
+            if !found {
+                w_item.deleted.set(true);
+                output.push_str(&format!("rm 'data/{}/{}'\n", w_item.category, w_item.object.filename));
+                continue;
             }
+        }
+    }
+
+
+    // Check for remaining dangling references
+    for item in graph.values().flatten() {
+        if item.deleted.get() {
+            continue;
         }
 
+        let mut has_links = false;
+        for link in item.back_links.borrow().iter()
+            .chain(item.forward_links.borrow().iter()) {
+            if !link.deleted.get() {
+                has_links = true;
+                continue;
+            }
+            output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.object.filename, item.category, item.object.filename));
+        }
+
+        if !has_links {
+            output.push_str(&format!("rm 'data/{}/{}'\n", item.category, item.object.filename));
+        }
     }
 
     Ok(output)
