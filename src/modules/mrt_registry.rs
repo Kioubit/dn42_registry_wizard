@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::process::Command;
 use crate::modules::object_reader::{filter_objects_source, read_registry_objects, RegistryObject};
 use crate::modules::util;
 use crate::modules::util::BoxResult;
+use std::collections::HashMap;
+use std::process::Command;
 
 pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) -> BoxResult<String> {
     let json_str = util::read_lines(json_file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n");

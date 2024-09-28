@@ -79,6 +79,14 @@ fn main() {
                                  Command::new("v4").about("IPv4"),
                                  Command::new("v6").about("IPv6"),
                              ]),
+                        Command::new("remove_mnt")
+                            .about("Remove a list of maintainers from the registry")
+                            .arg(
+                                Arg::new("list_file")
+                                .help("Path to a comma-separated list of maintainers to remove")
+                                    .required(true)
+                            )
+                         ,
                          Command::new("mrt_activity")
                              .about("Output last seen time for active ASNs in MRT RIB dumps. List registry resources that are unused.")
                              .subcommand_required(true)
@@ -191,7 +199,16 @@ fn main() {
                 exit(1);
             }
             println!("{}", result.unwrap());
-        }
+        },
+        Some(("remove_mnt", c)) => {
+            let mnt_file = c.get_one::<String>("list_file").unwrap();
+            let result = modules::registry_clean::output(base_path, mnt_file.clone());
+            if result.is_err() {
+                println!("{}", result.unwrap_err());
+                exit(1);
+            }
+            println!("{}", result.unwrap());
+        },
         Some(("mrt_activity", c)) => {
             let result = match c.subcommand() {
                 Some(("parse_mrt", c)) => {
