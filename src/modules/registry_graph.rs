@@ -1,9 +1,11 @@
-use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
-use std::rc::Rc;
-use serde::Serialize;
+use std::any::Any;
 use crate::modules::object_reader::{read_registry_objects, RegistryObject};
 use crate::modules::util::BoxResult;
+use serde::Serialize;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub(crate) struct Schema {
@@ -18,38 +20,56 @@ pub(crate) struct SchemaField {
     pub lookup_targets: Vec<String>,
 }
 
+pub trait ExtraDataTrait: Serialize + Debug + Default + Any {}
+impl ExtraDataTrait for () {}
+
 #[derive(Debug, Serialize)]
-pub(crate) struct LinkedRegistryObject {
+pub(crate) struct LinkedRegistryObject<M: ExtraDataTrait> {
     pub category: String,
     pub object: RegistryObject,
     #[serde(serialize_with = "links_serialize")]
-    pub forward_links: RefCell<Vec<Rc<LinkedRegistryObject>>>,
+    pub forward_links: RefCell<Vec<Rc<LinkedRegistryObject<M>>>>,
     #[serde(serialize_with = "links_serialize")]
-    pub back_links: RefCell<Vec<Rc<LinkedRegistryObject>>>,
-    pub marked: Cell<bool>,
-    pub deleted: Cell<bool>,
+    pub back_links: RefCell<Vec<Rc<LinkedRegistryObject<M>>>>,
+    #[serde(skip_serializing_if = "is_unit_type")]
+    pub extra: M,
 }
 
-fn links_serialize<S>(x: &RefCell<Vec<Rc<LinkedRegistryObject>>>, s: S) -> Result<S::Ok, S::Error>
-where S: serde::Serializer {
-    let link_array  = x.borrow()
+fn is_unit_type<T: Any>(_: &T) -> bool {
+    std::any::TypeId::of::<T>() == std::any::TypeId::of::<()>()
+}
+
+fn links_serialize<S, M>(x: &RefCell<Vec<Rc<LinkedRegistryObject<M>>>>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+    M: ExtraDataTrait,
+{
+    let link_array = x.borrow()
         .iter()
-        .map(|x| {String::from(&x.category) + "/" + &x.object.filename })
+        .map(|x| {
+            format!("{}/{}", &x.category, &x.object.filename)
+        })
         .collect::<Vec<_>>();
     link_array.serialize(s)
 }
 
-
-pub fn output(registry_root: String) -> BoxResult<String> {
+pub fn output(registry_root: String, obj_type: Option<String>) -> BoxResult<String> {
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
-    let graph = create_registry_graph(registry_root.to_owned(), &registry_schema)?;
-    Ok(serde_json::to_string(&graph)?)
+    let graph = create_registry_graph::<()>(registry_root.to_owned(), &registry_schema)?;
+    match obj_type {
+        None => {
+            Ok(serde_json::to_string(&graph)?)
+        }
+        Some(s) => {
+            Ok(serde_json::to_string(&graph.get(&s).ok_or("object type not found")?)?)
+        }
+    }
 }
 
-pub(crate) type RegistryGraph = HashMap<String, Vec<Rc<LinkedRegistryObject>>>;
+pub(crate) type RegistryGraph<M> = HashMap<String, Vec<Rc<LinkedRegistryObject<M>>>>;
 
-pub(crate) fn create_registry_graph(registry_root: String, registry_schema: &Vec<Schema>) -> BoxResult<RegistryGraph> {
-    let mut object_list: HashMap<String, Vec<Rc<LinkedRegistryObject>>> = HashMap::new();
+pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: String, registry_schema: &Vec<Schema>) -> BoxResult<RegistryGraph<M>> {
+    let mut object_list: HashMap<String, Vec<Rc<LinkedRegistryObject<M>>>> = HashMap::new();
 
     for schema in registry_schema {
         eprintln!("Reading {:?}", &("data/".to_owned() + &schema.name));
@@ -65,8 +85,7 @@ pub(crate) fn create_registry_graph(registry_root: String, registry_schema: &Vec
                 object,
                 forward_links: RefCell::new(vec![]),
                 back_links: RefCell::new(vec![]),
-                marked: Cell::from(false),
-                deleted: Cell::from(false),
+                extra: Default::default(),
             }))
         }
     }
@@ -107,7 +126,7 @@ pub(crate) fn create_registry_graph(registry_root: String, registry_schema: &Vec
                     }
 
 
-                    // -------- ADD LINKS TO CURRENT OBJECT --------
+                    // -------- Add links to current object --------
                     if !Rc::ptr_eq(target_object.unwrap(), object) {
                         let mut current_obj_forward_links = object.forward_links.borrow_mut();
                         let mut found = false;
@@ -123,7 +142,7 @@ pub(crate) fn create_registry_graph(registry_root: String, registry_schema: &Vec
                     }
                     // ----------------------------
 
-                    // -------- ADD BACKLINKS TO TARGET OBJECT --------
+                    // -------- Add backlinks to target object --------
                     if !Rc::ptr_eq(object, target_object.unwrap()) {
                         let mut target_obj_back_links = target_object.unwrap().back_links.borrow_mut();
                         let mut found = false;

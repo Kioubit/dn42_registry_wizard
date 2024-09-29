@@ -1,8 +1,17 @@
+use std::cell::Cell;
 use std::rc::Rc;
-use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkedRegistryObject};
+use serde::Serialize;
+use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkedRegistryObject, ExtraDataTrait};
 use crate::modules::util;
 use crate::modules::util::{BoxResult, EitherOr};
 
+
+#[derive(Debug, Serialize, Default)]
+struct MetaData {
+    marked: Cell<bool>,
+    deleted: Cell<bool>,
+}
+impl ExtraDataTrait for MetaData {}
 
 pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_subgraph_check: bool) -> BoxResult<String> {
     if !with_subgraph_check {
@@ -21,31 +30,35 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
         }
     };
     let mnt_list = mnt_raw_list.split(",").collect::<Vec<&str>>();
+    let only_one_mnt = match mnt_list.len() {
+        1 => true,
+        _ => false,
+    };
 
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
 
-    let graph = create_registry_graph(registry_root.to_owned(), &registry_schema)?;
+    let graph = create_registry_graph::<MetaData>(registry_root.to_owned(), &registry_schema)?;
     let mntner = graph.get("mntner").ok_or("mntner not found")?;
 
     // Assuming the registry objects form an undirected graph which is a superset of many disconnected sub-graphs
     // Mark all mntner vertices to delete
-    eprintln!("Marking mntners to delete");
+    eprintln!("Analyzing dependency graph (1/6)");
     for mnt in mntner {
         let mnt = mnt.clone();
         if mnt_list.contains(&&*mnt.object.filename) {
-            mnt.marked.set(true);
+            mnt.extra.marked.set(true);
         }
     }
 
-    eprintln!("Iterating through every unmarked mntner");
+    eprintln!("Analyzing dependency graph (2/6)");
     // For every *unmarked* vertex
     for mnt in mntner {
-        if mnt.marked.get() {
+        if mnt.extra.marked.get() {
             continue;
         }
         // Recursively follow each path while keeping track of visited vertices
-        let mut visited: Vec<Rc<LinkedRegistryObject>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
         visited.push(mnt.clone());
         to_visit.push(mnt.clone());
 
@@ -55,11 +68,14 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             }
 
             // If a *marked* mntner vertex is encountered, unmark it and flag it for manual review
-            if obj.marked.get() {
+            if obj.extra.marked.get() {
                 eprintln!("Manual review: {} (First conflict with active MNT: {})",
                           obj.object.filename, mnt.object.filename
                 );
-                obj.marked.set(false);
+                if only_one_mnt {
+                    return Err("Manual review needed".into());
+                }
+                obj.extra.marked.set(false);
             }
 
             link_recurse(&obj, &mut visited, &mut to_visit);
@@ -67,15 +83,15 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
     }
 
 
-    eprintln!("Iterating through every still marked mntner");
+    eprintln!("Analyzing dependency graph (3/6)");
     // For every *still marked* mntner vertex: Recursively delete all vertices
     // Recursively follow each path while keeping track of visited vertices
     for mnt in mntner {
-        if !mnt.marked.get() {
+        if !mnt.extra.marked.get() {
             continue;
         }
-        let mut visited: Vec<Rc<LinkedRegistryObject>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
         visited.push(mnt.clone());
         to_visit.push(mnt.clone());
 
@@ -83,17 +99,17 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             if weakly_referencing.contains(&obj.category.as_str()) {
                 continue;
             }
-            if obj.deleted.get() {
+            if obj.extra.deleted.get() {
                 continue;
             }
-            obj.deleted.set(true);
+            obj.extra.deleted.set(true);
             output.push_str(&format!("rm 'data/{}/{}'\n", obj.category, obj.object.filename));
 
             link_recurse(&obj, &mut visited, &mut to_visit);
         }
     }
 
-
+    eprintln!("Analyzing dependency graph (4/6)");
     // Check if weakly referenced objects have dangling references
     for w in weakly_referencing {
         let empty_vec = vec![];
@@ -104,30 +120,30 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             let mut found = false;
             for reference in w_item.back_links.borrow().iter()
                 .chain(w_item.forward_links.borrow().iter()) {
-                if reference.deleted.get() {
+                if reference.extra.deleted.get() {
                     continue;
                 }
                 found = true;
             }
             if !found {
-                w_item.deleted.set(true);
+                w_item.extra.deleted.set(true);
                 output.push_str(&format!("rm 'data/{}/{}'\n", w_item.category, w_item.object.filename));
                 continue;
             }
         }
     }
 
-
+    eprintln!("Analyzing dependency graph (5/6)");
     // Check for remaining dangling references
     for item in graph.values().flatten() {
-        if item.deleted.get() {
+        if item.extra.deleted.get() {
             continue;
         }
 
         let mut has_links = false;
         for link in item.back_links.borrow().iter()
             .chain(item.forward_links.borrow().iter()) {
-            if !link.deleted.get() {
+            if !link.extra.deleted.get() {
                 has_links = true;
                 continue;
             }
@@ -135,16 +151,17 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
         }
 
         if !has_links {
-            item.deleted.set(true);
+            item.extra.deleted.set(true);
             output.push_str(&format!("rm 'data/{}/{}'\n", item.category, item.object.filename));
             continue;
         }
     }
 
+    eprintln!("Analyzing dependency graph (6/6)");
     // Final pass
     // Check if all required lookup keys are present (important for weakly referencing objects)
     for item in graph.values().flatten() {
-        if item.deleted.get() {
+        if item.extra.deleted.get() {
             continue;
         }
 
@@ -165,7 +182,7 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
                 continue;
             }
             if !item.forward_links.borrow().iter()
-                .filter(|x| !x.deleted.get())
+                .filter(|x| !x.extra.deleted.get())
                 .any(|x| x.category == *required_category) {
                 // If we don't find a link with the required category
                 required_category_missing = true;
@@ -173,7 +190,7 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             }
         }
         if required_category_missing {
-            item.deleted.set(true);
+            item.extra.deleted.set(true);
             output.push_str(&format!("rm 'data/{}/{}'\n", item.category, item.object.filename));
             continue;
         }
@@ -183,21 +200,22 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
         return Ok(output);
     }
 
+    eprintln!("Checking for invalid sub-graphs");
     // Check for incomplete sub-graphs
     for item in graph.get("mntner").ok_or("can't find mntner category")? {
-        if item.deleted.get() {
+        if item.extra.deleted.get() {
             continue;
         }
 
         let mut graph_has_asn = false;
 
-        let mut visited: Vec<Rc<LinkedRegistryObject>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
         visited.push(item.clone());
         to_visit.push(item.clone());
 
         while let Some(obj) = to_visit.pop() {
-            if obj.deleted.get() {
+            if obj.extra.deleted.get() {
                 continue;
             }
             if obj.category == "aut-num" {
@@ -211,8 +229,8 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             eprintln!("Warning: Deleting invalid sub-graph for item '{}': {:?}", item.object.filename,
                       visited.iter().map(|x| x.object.filename.clone()).collect::<Vec<_>>());
             for visited in &visited.iter()
-                .filter(|x| !x.deleted.get()).collect::<Vec<_>>() {
-                visited.deleted.set(true);
+                .filter(|x| !x.extra.deleted.get()).collect::<Vec<_>>() {
+                visited.extra.deleted.set(true);
                 output.push_str(&format!("rm 'data/{}/{}'\n", visited.category, visited.object.filename));
             }
         }
@@ -222,7 +240,9 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
 }
 
 
-fn link_recurse(obj: &Rc<LinkedRegistryObject>, visited: &mut Vec<Rc<LinkedRegistryObject>>, to_visit: &mut Vec<Rc<LinkedRegistryObject>>) {
+fn link_recurse(obj: &Rc<LinkedRegistryObject<MetaData>>,
+                visited: &mut Vec<Rc<LinkedRegistryObject<MetaData>>>,
+                to_visit: &mut Vec<Rc<LinkedRegistryObject<MetaData>>>) {
     for link in obj.forward_links.borrow().iter()
         .chain(obj.back_links.borrow().iter()) {
         let mut found = false;

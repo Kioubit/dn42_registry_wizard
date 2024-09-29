@@ -1,9 +1,10 @@
+use crate::modules::util;
+use crate::modules::util::BoxResult;
+use serde::Serialize;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::read_dir;
 use std::path::PathBuf;
-use serde::Serialize;
-use crate::modules::util;
-use crate::modules::util::BoxResult;
 
 
 #[derive(Debug, Serialize)]
@@ -15,11 +16,21 @@ pub struct RegistryObject {
 pub struct RegistryObjectIterator {
     paths: Vec<(String, PathBuf)>,
     filename_filter: Vec<String>,
+    exclusive_fields: RefCell<Option<Vec<String>>>,
+    filtered_fields: RefCell<Option<Vec<String>>>,
 }
 
 impl RegistryObjectIterator {
     pub fn add_filename_filter(&mut self, filter: &str) -> &Self {
         self.filename_filter.push(filter.to_owned());
+        self
+    }
+    pub fn add_exclusive_fields(&mut self, list: Vec<String>) -> &Self {
+        self.exclusive_fields.replace(Some(list));
+        self
+    }
+    pub fn add_filtered_fields(&mut self, list: Vec<String>) -> &Self {
+        self.filtered_fields.replace(Some(list));
         self
     }
 }
@@ -37,7 +48,7 @@ impl Iterator for RegistryObjectIterator {
             }
             break;
         }
-        let obj = read_registry_object_kv(path.1);
+        let obj = read_registry_object_kv_filtered(path.1, &self.exclusive_fields.borrow(), &self.filtered_fields.borrow());
         match obj {
             Ok(obj) => {
                 Some(Ok(RegistryObject {
@@ -52,7 +63,12 @@ impl Iterator for RegistryObjectIterator {
 
 pub fn registry_objects_to_iter(registry_root: String, sub_path: &str) -> BoxResult<RegistryObjectIterator> {
     let paths = get_object_paths(registry_root, sub_path)?;
-    Ok(RegistryObjectIterator { paths, filename_filter: vec![] })
+    Ok(RegistryObjectIterator {
+        paths,
+        filename_filter: vec![],
+        exclusive_fields: RefCell::new(None),
+        filtered_fields: RefCell::new(None),
+    })
 }
 
 fn get_object_paths(registry_root: String, sub_path: &str) -> BoxResult<Vec<(String, PathBuf)>> {
@@ -92,11 +108,30 @@ pub fn read_registry_objects(registry_root: String, sub_path: &str, enumerate_on
 }
 
 pub fn read_registry_object_kv(path: PathBuf) -> BoxResult<HashMap<String, Vec<String>>> {
+    read_registry_object_kv_filtered(path, &None, &None)
+}
+
+pub fn read_registry_object_kv_filtered(path: PathBuf, exclusive_fields: &Option<Vec<String>>,
+                                        filtered_fields: &Option<Vec<String>>)
+                                        -> BoxResult<HashMap<String, Vec<String>>> {
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
     let lines = util::read_lines(&path)?;
     for line in lines {
         if let Some(result) = line?.split_once(':') {
             let obj_key = result.0.trim_end();
+
+            if let Some(ref f) = exclusive_fields {
+                if !f.contains(&obj_key.to_string()) {
+                    continue;
+                }
+            }
+
+            if let Some(ref f) = filtered_fields {
+                if f.contains(&obj_key.to_string()) {
+                    continue;
+                }
+            }
+
             if !map.contains_key(obj_key) {
                 map.insert(obj_key.to_string(), Vec::new());
             }

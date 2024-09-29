@@ -180,6 +180,12 @@ fn read_tld_objects(registry_root: String, show_nameserver_note: bool) -> BoxRes
     let mut tld_objects: Vec<TldObject> = Vec::new();
     let mut registry_objects = registry_objects_to_iter(registry_root.clone(), "data/dns")?;
     registry_objects.add_filename_filter(".");
+    registry_objects.add_exclusive_fields(vec![
+        String::from("domain"),
+        String::from("mnt-by"),
+        String::from("ds-rdata"),
+        String::from("nserver"),
+    ]);
     for obj in registry_objects {
         let obj = obj?;
         let mut tld_builder = TldObjectBuilder::new();

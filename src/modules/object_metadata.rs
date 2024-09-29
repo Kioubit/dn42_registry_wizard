@@ -1,9 +1,21 @@
-use crate::modules::object_reader::read_registry_objects;
+use crate::modules::object_reader::registry_objects_to_iter;
 use crate::modules::util::BoxResult;
+use std::collections::HashMap;
 
-pub fn output(registry_root: String, target_folder: String) -> BoxResult<String> {
+pub fn output(registry_root: String, target_folder: String,
+              exclusive_fields: Option<Vec<String>>, filtered_fields: Option<Vec<String>>) -> BoxResult<String> {
     let sub_path = "data/".to_owned() + &*target_folder;
-    let result =
-        read_registry_objects(registry_root, sub_path.as_str(), false)?;
-    Ok(serde_json::to_string(&result)?)
+    let mut objects = HashMap::new();
+    let mut registry = registry_objects_to_iter(registry_root, sub_path.as_str())?;
+    if let Some(exclusive_fields) = exclusive_fields {
+        registry.add_exclusive_fields(exclusive_fields);
+    }
+    if let Some(filtered_fields) = filtered_fields {
+        registry.add_filtered_fields(filtered_fields);
+    }
+    for item in registry {
+        let item = item?;
+        objects.insert(item.filename, item.key_value);
+    }
+    Ok(serde_json::to_string(&objects)?)
 }

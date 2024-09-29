@@ -57,28 +57,27 @@ fn main() {
                         ),
                     Command::new("tas").about("Output trust anchors"),
                 ]),
-            Command::new("inetnumMetadata")
-                .about("Inetnum metadata output (JSON format)")
-                .subcommand_required(true)
-                .subcommands([
-                    Command::new("v4").about("IPv4"),
-                    Command::new("v6").about("IPv6"),
-                ]),
-            Command::new("objectMetadata")
+            Command::new("object_metadata")
                 .about("Object metadata output (JSON format)")
-                .arg(
+                .args([
                     Arg::new("object_type")
                         .required(true)
                         .help("object type such as 'mntner', 'domain' etc. \
-                                     (Based on the directories in the registry)")
-                ),
+                                     (Based on the directories in the registry)"),
+                    Arg::new("exclusive_fields")
+                        .short('x')
+                        .help("Comma separated list of the only object fields to output"),
+                    Arg::new("filtered_fields")
+                        .short('g')
+                        .help("Comma separated list of object fields to ignore")
+                ]),
             Command::new("graph")
                 .about("Object registry objects with forward and backlinks (JSON format)")
                 .arg(
                     Arg::new("graph_category")
                         .help("Only output specific object types (i.e. aut-num)")
                 ),
-            Command::new("hierarchicalPrefixes")
+            Command::new("hierarchical_prefixes")
                 .about("Hierarchical prefix tree output (JSON format)")
                 .subcommand_required(true)
                 .subcommands([
@@ -94,12 +93,12 @@ fn main() {
                         .help("Path to a file containing a comma-separated list of maintainers to remove"),
                     Arg::new("list")
                         .long("list")
-                        .short('i')
-                        .help("comma-separated list of maintainers to remove"),
-                    Arg::new("disable_subgraph_check")
-                        .help("disable check for invalid sub-graphs")
-                        .long("disable_subgraph_check")
                         .short('l')
+                        .help("comma-separated list of maintainers to remove"),
+                    Arg::new("enable_subgraph_check")
+                        .help("disable check for invalid sub-graphs")
+                        .long("enable_subgraph_check")
+                        .short('s')
                         .action(ArgAction::SetTrue),
                 ])
                 .group(
@@ -179,25 +178,21 @@ fn main() {
                 _ => unreachable!()
             }
         }
-        Some(("inetnumMetadata", c)) => {
-            let result = match c.subcommand() {
-                Some(("v4", _)) => {
-                    modules::inetnum_metadata::output(base_path, true)
-                }
-                Some(("v6", _)) => {
-                    modules::inetnum_metadata::output(base_path, false)
-                }
-                _ => unreachable!()
-            };
-            if result.is_err() {
-                println!("{}", result.unwrap_err());
-                exit(1);
-            }
-            println!("{}", result.unwrap());
-        }
-        Some(("objectMetadata", c)) => {
+        Some(("object_metadata", c)) => {
             let object_type = c.get_one::<String>("object_type").unwrap();
-            let result = modules::object_metadata::output(base_path, object_type.to_owned());
+            let mut filtered_fields: Option<Vec<String>> = None;
+            let mut exclusive_fields: Option<Vec<String>> = None;
+            if c.contains_id("filtered_fields") {
+                let v = c.get_one::<String>("filtered_fields").unwrap().clone();
+                let l: Vec<_> = v.split(",").map(|v| v.to_string()).collect();
+                filtered_fields = Some(l);
+            }
+            if c.contains_id("exclusive_fields") {
+                let v = c.get_one::<String>("exclusive_fields").unwrap().clone();
+                let l: Vec<_> = v.split(",").map(|v| v.to_string()).collect();
+                exclusive_fields = Some(l);
+            }
+            let result = modules::object_metadata::output(base_path, object_type.to_owned(), exclusive_fields, filtered_fields);
             if result.is_err() {
                 println!("{}", result.unwrap_err());
                 exit(1);
@@ -205,17 +200,18 @@ fn main() {
             println!("{}", result.unwrap());
         }
         Some(("graph", c)) => {
+            let mut obj_type: Option<String> = None;
             if c.contains_id("graph_category") {
-                // TODO
+                obj_type = Some(c.get_one::<String>("graph_category").unwrap().clone())
             }
-            let result = modules::registry_graph::output(base_path);
+            let result = modules::registry_graph::output(base_path, obj_type);
             if result.is_err() {
                 println!("{}", result.unwrap_err());
                 exit(1);
             }
             println!("{}", result.unwrap());
         }
-        Some(("hierarchicalPrefixes", c)) => {
+        Some(("hierarchical_prefixes", c)) => {
             let result = match c.subcommand() {
                 Some(("v4", _)) => {
                     modules::hierarchical_prefixes::output(base_path, true)
@@ -240,8 +236,8 @@ fn main() {
                 EitherOr::B(mnt_list.clone())
             };
 
-            let disable_subgraph_check = c.get_one::<bool>("disable_subgraph_check").unwrap();
-            let result = modules::registry_clean::output(base_path, input, !disable_subgraph_check);
+            let enable_subgraph_check = c.get_one::<bool>("enable_subgraph_check").unwrap();
+            let result = modules::registry_clean::output(base_path, input, enable_subgraph_check.clone());
             if result.is_err() {
                 println!("{}", result.unwrap_err());
                 exit(1);
@@ -268,6 +264,6 @@ fn main() {
             }
             println!("{}", result.unwrap());
         }
-        _ => {}
+        _ => unreachable!()
     }
 }
