@@ -56,7 +56,9 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
 
             // If a *marked* mntner vertex is encountered, unmark it and flag it for manual review
             if obj.marked.get() {
-                eprintln!("Manual review: {}", obj.object.filename);
+                eprintln!("Manual review: {} (First conflict with active MNT: {})",
+                          obj.object.filename, mnt.object.filename
+                );
                 obj.marked.set(false);
             }
 

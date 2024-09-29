@@ -6,5 +6,5 @@ pub mod hierarchical_prefixes;
 pub mod mrt_activity;
 pub(crate) mod object_metadata;
 pub mod mrt_registry;
-mod registry_graph;
+pub mod registry_graph;
 pub mod registry_clean;

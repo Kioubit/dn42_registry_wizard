@@ -72,6 +72,12 @@ fn main() {
                         .help("object type such as 'mntner', 'domain' etc. \
                                      (Based on the directories in the registry)")
                 ),
+            Command::new("graph")
+                .about("Object registry objects with forward and backlinks (JSON format)")
+                .arg(
+                    Arg::new("graph_category")
+                        .help("Only output specific object types (i.e. aut-num)")
+                ),
             Command::new("hierarchicalPrefixes")
                 .about("Hierarchical prefix tree output (JSON format)")
                 .subcommand_required(true)
@@ -192,6 +198,17 @@ fn main() {
         Some(("objectMetadata", c)) => {
             let object_type = c.get_one::<String>("object_type").unwrap();
             let result = modules::object_metadata::output(base_path, object_type.to_owned());
+            if result.is_err() {
+                println!("{}", result.unwrap_err());
+                exit(1);
+            }
+            println!("{}", result.unwrap());
+        }
+        Some(("graph", c)) => {
+            if c.contains_id("graph_category") {
+                // TODO
+            }
+            let result = modules::registry_graph::output(base_path);
             if result.is_err() {
                 println!("{}", result.unwrap_err());
                 exit(1);

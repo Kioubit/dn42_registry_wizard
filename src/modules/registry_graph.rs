@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use serde::Serialize;
 use crate::modules::object_reader::{read_registry_objects, RegistryObject};
 use crate::modules::util::BoxResult;
 
@@ -17,14 +18,32 @@ pub(crate) struct SchemaField {
     pub lookup_targets: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub(crate) struct LinkedRegistryObject {
     pub category: String,
     pub object: RegistryObject,
+    #[serde(serialize_with = "links_serialize")]
     pub forward_links: RefCell<Vec<Rc<LinkedRegistryObject>>>,
+    #[serde(serialize_with = "links_serialize")]
     pub back_links: RefCell<Vec<Rc<LinkedRegistryObject>>>,
     pub marked: Cell<bool>,
     pub deleted: Cell<bool>,
+}
+
+fn links_serialize<S>(x: &RefCell<Vec<Rc<LinkedRegistryObject>>>, s: S) -> Result<S::Ok, S::Error>
+where S: serde::Serializer {
+    let link_array  = x.borrow()
+        .iter()
+        .map(|x| {String::from(&x.category) + "/" + &x.object.filename })
+        .collect::<Vec<_>>();
+    link_array.serialize(s)
+}
+
+
+pub fn output(registry_root: String) -> BoxResult<String> {
+    let registry_schema = parse_registry_schema(registry_root.to_owned())?;
+    let graph = create_registry_graph(registry_root.to_owned(), &registry_schema)?;
+    Ok(serde_json::to_string(&graph)?)
 }
 
 pub(crate) type RegistryGraph = HashMap<String, Vec<Rc<LinkedRegistryObject>>>;
