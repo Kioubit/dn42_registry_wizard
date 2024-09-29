@@ -30,10 +30,7 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
         }
     };
     let mnt_list = mnt_raw_list.split(",").collect::<Vec<&str>>();
-    let only_one_mnt = match mnt_list.len() {
-        1 => true,
-        _ => false,
-    };
+    let only_one_mnt = matches!(mnt_list.len(), 1);
 
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
 

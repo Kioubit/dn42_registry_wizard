@@ -68,8 +68,13 @@ fn main() {
                         .short('x')
                         .help("Comma separated list of the only object fields to output"),
                     Arg::new("filtered_fields")
-                        .short('g')
-                        .help("Comma separated list of object fields to ignore")
+                        .short('i')
+                        .help("Comma separated list of object fields to ignore"),
+                    Arg::new("skip_empty")
+                        .short('e')
+                        .long("skip_empty")
+                        .action(ArgAction::SetTrue)
+                        .help("Don't output objects without keys (useful if filtering)"),
                 ]),
             Command::new("graph")
                 .about("Object registry objects with forward and backlinks (JSON format)")
@@ -178,7 +183,8 @@ fn main() {
             }
         }
         Some(("object_metadata", c)) => {
-            let object_type = c.get_one::<String>("object_type").unwrap();
+            let skip_empty = *c.get_one::<bool>("skip_empty").unwrap();
+            let object_type = c.get_one::<String>("object_type").unwrap().clone();
             let mut filtered_fields: Option<Vec<String>> = None;
             let mut exclusive_fields: Option<Vec<String>> = None;
             if c.contains_id("filtered_fields") {
@@ -191,7 +197,9 @@ fn main() {
                 let l: Vec<_> = v.split(",").map(|v| v.to_string()).collect();
                 exclusive_fields = Some(l);
             }
-            let result = modules::object_metadata::output(base_path, object_type.to_owned(), exclusive_fields, filtered_fields);
+            let result = modules::object_metadata::output(
+                base_path, object_type, exclusive_fields, filtered_fields, skip_empty
+            );
             if result.is_err() {
                 println!("{}", result.unwrap_err());
                 exit(1);
@@ -235,8 +243,8 @@ fn main() {
                 EitherOr::B(mnt_list.clone())
             };
 
-            let enable_subgraph_check = c.get_one::<bool>("enable_subgraph_check").unwrap();
-            let result = modules::registry_clean::output(base_path, input, enable_subgraph_check.clone());
+            let enable_subgraph_check = *c.get_one::<bool>("enable_subgraph_check").unwrap();
+            let result = modules::registry_clean::output(base_path, input, enable_subgraph_check);
             if result.is_err() {
                 println!("{}", result.unwrap_err());
                 exit(1);
