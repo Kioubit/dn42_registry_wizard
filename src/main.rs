@@ -148,7 +148,6 @@ fn main() {
     match cmd.subcommand() {
         Some(("roa", c)) => {
             let is_strict = c.get_one::<bool>("strict").unwrap();
-            println!("Roa generation");
             match c.subcommand() {
                 Some(("v4", _)) => {
                     roa_wizard_lib::check_and_output(generate_bird(base_path, false), *is_strict)
