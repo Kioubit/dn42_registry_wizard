@@ -9,7 +9,7 @@ Commands:
   roa                    ROA file generation (various formats)
   dns                    DNS zone file and trust anchor generation (for use with PowerDNS)
   object_metadata        Object metadata output (JSON format)
-  graph                  Object registry objects with forward and backlinks (JSON format)
+  graph                  Registry object output with forward and backlinks (JSON format)
   hierarchical_prefixes  Hierarchical prefix tree output (JSON format)
   remove_mnt             Remove a list of maintainers along with all their objects from the registry
   mrt_activity           Output last seen time for active ASNs in MRT RIB dumps. List inactive maintainers.
@@ -24,4 +24,4 @@ Options:
 ```
 
 ### Build notes
-For the release target, ``musl-gcc`` is required. (``musl`` package on Arch Linux)
+For the default build target, ``musl-gcc`` is required. (``musl`` package on Arch Linux)

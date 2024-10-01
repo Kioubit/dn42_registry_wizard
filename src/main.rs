@@ -71,7 +71,7 @@ fn main() {
                         .help("Don't output objects without keys (useful if filtering)"),
                 ]),
             Command::new("graph")
-                .about("Object registry objects with forward and backlinks (JSON format)")
+                .about("Registry object output with forward and backlinks (JSON format)")
                 .arg(
                     Arg::new("graph_category")
                         .help("Only output specific object types (i.e. aut-num)")
