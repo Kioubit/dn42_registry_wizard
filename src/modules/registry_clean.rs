@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 use serde::Serialize;
-use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkedRegistryObject, ExtraDataTrait};
+use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkedRegistryObject, ExtraDataTrait, link_recurse, WEAKLY_REFERENCING};
 use crate::modules::util;
 use crate::modules::util::{BoxResult, EitherOr};
 
@@ -17,7 +17,6 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
     if !with_subgraph_check {
         eprintln!("Warning: Subgraph check has been disabled")
     }
-    let weakly_referencing: [&str; 2] = ["as-set", "route-set"];
 
     let mut output = String::new();
 
@@ -61,20 +60,20 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
         to_visit.push(mnt.clone());
 
         while let Some(obj) = to_visit.pop() {
-            if weakly_referencing.contains(&obj.category.as_str()) {
+            if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
                 continue;
             }
 
             // If an *unmarked* mntner vertex is encountered, unmark self and flag for manual review
-            if !obj.extra.marked.get() && obj.category == "mntner"{
+            if !obj.extra.marked.get() && obj.category == "mntner" {
                 mnt.extra.marked.set(false);
                 eprintln!("Manual review: {} (First conflict with active MNT: {})",
                           mnt.object.filename, obj.object.filename
                 );
-                if only_one_mnt && !with_subgraph_check{
+                if only_one_mnt && !with_subgraph_check {
                     return Err("Manual review needed".into());
                 }
-                break
+                break;
             }
 
             link_recurse(&obj, &mut visited, &mut to_visit);
@@ -95,7 +94,7 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
         to_visit.push(mnt.clone());
 
         while let Some(obj) = to_visit.pop() {
-            if weakly_referencing.contains(&obj.category.as_str()) {
+            if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
                 continue;
             }
             if obj.extra.deleted.get() {
@@ -110,16 +109,16 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
 
     eprintln!("Analyzing dependency graph (4/6)");
     // Check if weakly referenced objects have dangling references
-    for w in weakly_referencing {
+    for w in WEAKLY_REFERENCING {
         let empty_vec = vec![];
         let w_list: Vec<_> = graph.get(w)
             .unwrap_or(&empty_vec)
             .iter().collect();
         for w_item in w_list {
             let mut found = false;
-            for reference in w_item.back_links.borrow().iter()
-                .chain(w_item.forward_links.borrow().iter()) {
-                if reference.upgrade().unwrap().extra.deleted.get() {
+            for reference in w_item.get_back_links()
+                .chain(w_item.get_forward_links()) {
+                if reference.extra.deleted.get() {
                     continue;
                 }
                 found = true;
@@ -140,13 +139,13 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
         }
 
         let mut has_links = false;
-        for link in item.back_links.borrow().iter()
-            .chain(item.forward_links.borrow().iter()) {
-            if !link.upgrade().unwrap().extra.deleted.get() {
+        for link in item.get_back_links()
+            .chain(item.get_forward_links()) {
+            if !link.extra.deleted.get() {
                 has_links = true;
                 continue;
             }
-            output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.upgrade().unwrap().object.filename, item.category, item.object.filename));
+            output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.object.filename, item.category, item.object.filename));
         }
 
         if !has_links {
@@ -180,9 +179,9 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
                 // We have that category
                 continue;
             }
-            if !item.forward_links.borrow().iter()
-                .filter(|x| !x.upgrade().unwrap().extra.deleted.get())
-                .any(|x| x.upgrade().unwrap().category == *required_category) {
+            if !item.get_forward_links()
+                .filter(|x| !x.extra.deleted.get())
+                .any(|x| x.category == *required_category) {
                 // If we don't find a link with the required category
                 required_category_missing = true;
                 break;
@@ -236,28 +235,4 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
     }
 
     Ok(output)
-}
-
-
-fn link_recurse(obj: &Rc<LinkedRegistryObject<MetaData>>,
-                visited: &mut Vec<Rc<LinkedRegistryObject<MetaData>>>,
-                to_visit: &mut Vec<Rc<LinkedRegistryObject<MetaData>>>) {
-    for link in obj.forward_links.borrow().iter()
-        .chain(obj.back_links.borrow().iter()) {
-        let mut found = false;
-        for visited in &mut *visited {
-            // Do not visit a vertex twice
-            if Rc::ptr_eq(&link.upgrade().unwrap(), visited) {
-                found = true;
-                break;
-            }
-        }
-        if found {
-            continue;
-        }
-
-        // If not visited already
-        visited.push(link.upgrade().unwrap());
-        to_visit.push(link.upgrade().unwrap());
-    }
 }

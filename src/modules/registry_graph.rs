@@ -28,48 +28,48 @@ pub(crate) struct LinkedRegistryObject<M: ExtraDataTrait> {
     pub category: String,
     pub object: RegistryObject,
     #[serde(serialize_with = "links_serialize")]
-    pub forward_links: RefCell<Vec<Weak<LinkedRegistryObject<M>>>>,
+    forward_links: RefCell<Vec<Weak<LinkedRegistryObject<M>>>>,
     #[serde(serialize_with = "links_serialize")]
-    pub back_links: RefCell<Vec<Weak<LinkedRegistryObject<M>>>>,
+    back_links: RefCell<Vec<Weak<LinkedRegistryObject<M>>>>,
     #[serde(skip_serializing_if = "is_unit_type")]
     pub extra: M,
 }
 
+pub(crate) const WEAKLY_REFERENCING: [&str; 2] = ["as-set", "route-set"];
+
 pub(crate) struct LinkIterator<'a, M: ExtraDataTrait> {
     object: &'a LinkedRegistryObject<M>,
     index: usize,
-    backlinks: bool
+    backlinks: bool,
 }
 
 impl<'a, M: ExtraDataTrait> Iterator for LinkIterator<'a, M> {
     type Item = Rc<LinkedRegistryObject<M>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let lo = if self.backlinks  {
-            &self.object.back_links.borrow()
-        } else {
-            &self.object.forward_links.borrow()
+        let lo = if self.backlinks {
+            self.object.back_links.borrow()
+        } else { 
+            self.object.forward_links.borrow()
         };
         let l = lo.get(self.index);
         self.index += 1;
-        match l {
-            Some(l) => Some(l.upgrade().unwrap()),
-            None => None
-        }
+
+        l.map(|x| x.upgrade().unwrap())
     }
 }
 
-impl<M: ExtraDataTrait> LinkedRegistryObject<M>  {
+impl<M: ExtraDataTrait> LinkedRegistryObject<M> {
     pub fn get_back_links(&self) -> LinkIterator<M> {
         LinkIterator {
-            object: &self,
+            object: self,
             index: 0,
             backlinks: true,
         }
     }
     pub fn get_forward_links(&self) -> LinkIterator<M> {
         LinkIterator {
-            object: &self,
+            object: self,
             index: 0,
             backlinks: false,
         }
@@ -88,7 +88,7 @@ where
     let link_array = x.borrow()
         .iter()
         .filter_map(|x| {
-            x.upgrade().and_then(| x| {
+            x.upgrade().and_then(|x| {
                 format!("{}/{}", x.category, x.object.filename).into()
             })
         })
@@ -96,7 +96,7 @@ where
     link_array.serialize(s)
 }
 
-pub fn output(registry_root: String, obj_type: Option<String>, object_name: Option<String>) -> BoxResult<String> {
+pub fn output_list(registry_root: String, obj_type: Option<String>, object_name: Option<String>) -> BoxResult<String> {
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
     let graph = create_registry_graph::<()>(registry_root.to_owned(), &registry_schema)?;
     match obj_type {
@@ -118,6 +118,49 @@ pub fn output(registry_root: String, obj_type: Option<String>, object_name: Opti
             }
         }
     }
+}
+
+pub fn output_related(registry_root: String, obj_type: String,
+                      obj_name: String, enforce_mnt_by: Option<String>, only_related_to_mnt: Option<String>,
+) -> BoxResult<String> {
+    let schema = parse_registry_schema(registry_root.to_owned())?;
+    let graph = create_registry_graph::<()>(registry_root, &schema)?;
+    let t_obj = graph.get(&obj_type).ok_or("specified object type not found")?
+        .iter().find(|x| x.object.filename == obj_name)
+        .ok_or("specified obj_name not found")?;
+
+    let mut visited: Vec<Rc<LinkedRegistryObject<()>>> = Vec::new();
+    let mut to_visit: Vec<Rc<LinkedRegistryObject<()>>> = Vec::new();
+    visited.push(t_obj.clone());
+    to_visit.push(t_obj.clone());
+    while let Some(obj) = to_visit.pop() {
+        if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
+            continue;
+        }
+        if let Some(ref target) = only_related_to_mnt {
+            if let Some(m) = obj.object.key_value.get("mnt-by") {
+                if m.iter().any(|x| x != target) {
+                    continue;
+                }
+            }
+        }
+        link_recurse(&obj, &mut visited, &mut to_visit);
+    }
+    if let Some(ref target) = enforce_mnt_by {
+        visited.retain(|v| {
+            if let Some(m) = v.object.key_value.get("mnt-by") {
+                if m.iter().any(|x| x != target) {
+                    return false;
+                }
+            }
+            true
+        });
+    }
+
+    let result: Vec<_> = visited.iter()
+        .map(|x| format!("{}/{}", x.category, x.object.filename))
+        .collect();
+    Ok(serde_json::to_string(&result)?)
 }
 
 pub(crate) type RegistryGraph<M> = HashMap<String, Vec<Rc<LinkedRegistryObject<M>>>>;
@@ -280,4 +323,26 @@ pub(crate) fn parse_registry_schema(registry_root: String) -> BoxResult<Vec<Sche
     }
 
     Ok(schemata)
+}
+
+
+pub(crate) fn link_recurse<M: ExtraDataTrait>(obj: &Rc<LinkedRegistryObject<M>>,
+                                              visited: &mut Vec<Rc<LinkedRegistryObject<M>>>,
+                                              to_visit: &mut Vec<Rc<LinkedRegistryObject<M>>>) {
+    for link in obj.get_forward_links().chain(obj.get_back_links()) {
+        let mut found = false;
+        for visited in &mut *visited {
+            // Do not visit a vertex twice
+            if Rc::ptr_eq(&link, visited) {
+                found = true;
+                break;
+            }
+        }
+        if found {
+            continue;
+        }
+        // If not visited already
+        visited.push(link.clone());
+        to_visit.push(link.clone());
+    }
 }

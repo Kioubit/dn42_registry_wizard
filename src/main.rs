@@ -1,9 +1,9 @@
-use std::io::Write;
-use std::io;
+use crate::modules::util::{BoxResult, EitherOr};
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use roa_wizard_lib::{generate_bird, generate_json};
+use std::io;
+use std::io::Write;
 use std::process::exit;
-use crate::modules::util::{BoxResult, EitherOr};
 
 mod modules;
 
@@ -72,12 +72,38 @@ fn main() {
                 ]),
             Command::new("graph")
                 .about("Registry object output with forward and backlinks (JSON format)")
-                .args([
-                    Arg::new("graph_category")
-                        .help("Only output specific object types (i.e. aut-num)"),
-                    Arg::new("object_name")
-                        .help("Only output a specific object by name")
-                    ]),
+                .subcommand_required(true)
+                .subcommands([
+                    Command::new("list")
+                        .about("List graph or specified parts of it")
+                        .args([
+                            Arg::new("object_type")
+                                .help("Only output specific object types (i.e. aut-num)"),
+                            Arg::new("object_name")
+                                .help("Only output a specific object by name")
+                        ]),
+                    Command::new("related")
+                        .about("Show all related objects to a specified one")
+                        .args([
+                            Arg::new("object_type")
+                                .required(true)
+                                .help("Object types (i.e. aut-num)"),
+                            Arg::new("object_name")
+                                .required(true)
+                                .help("Object name (i.e. AS4242420000)"),
+                            Arg::new("enforce_mnt_by")
+                                .help("Only show objects that are maintained by the specified mnt")
+                                .long("enforce-mnt-by")
+                                .short('e'),
+                            Arg::new("related_mnt_by")
+                                .help("Only show objects that are maintained by the specified mnt or that are directly related")
+                                .long("related-mnt-by")
+                                .short('r'),
+                        ])
+                        .group(ArgGroup::new("input_group")
+                            .args(["enforce_mnt_by", "related_mnt_by"])
+                            .required(false)),
+                ]),
             Command::new("hierarchical_prefixes")
                 .about("Hierarchical prefix tree output (JSON format)")
                 .subcommand_required(true)
@@ -190,21 +216,42 @@ fn main() {
                 exclusive_fields = Some(l);
             }
             let result = modules::object_metadata::output(
-                base_path, object_type, exclusive_fields, filtered_fields, skip_empty
+                base_path, object_type, exclusive_fields, filtered_fields, skip_empty,
             );
             output_result(result)
         }
         Some(("graph", c)) => {
-            let mut obj_type: Option<String> = None;
-            let mut obj_name: Option<String> = None;
-            if c.contains_id("graph_category") {
-                obj_type = Some(c.get_one::<String>("graph_category").unwrap().clone())
+            match c.subcommand() {
+                Some(("list", c)) => {
+                    let mut obj_type: Option<String> = None;
+                    let mut obj_name: Option<String> = None;
+                    if c.contains_id("object_type") {
+                        obj_type = Some(c.get_one::<String>("object_type").unwrap().clone())
+                    }
+                    if c.contains_id("object_name") {
+                        obj_name = Some(c.get_one::<String>("object_name").unwrap().clone())
+                    }
+                    let result = modules::registry_graph::output_list(base_path, obj_type, obj_name);
+                    output_result(result)
+                }
+                Some(("related", c)) => {
+                    let obj_type = c.get_one::<String>("object_type").unwrap().clone();
+                    let obj_name = c.get_one::<String>("object_name").unwrap().clone();
+                    let enforce_mnt_by = if c.contains_id("enforce_mnt_by") {
+                        Some(c.get_one::<String>("enforce_mnt_by").unwrap().clone())
+                    } else {
+                        None
+                    };
+                    let related_mnt_by = if c.contains_id("related_mnt_by") {
+                        Some(c.get_one::<String>("related_mnt_by").unwrap().clone())
+                    } else {
+                        None
+                    };
+                    let result = modules::registry_graph::output_related(base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by);
+                    output_result(result)
+                }
+                _ => unreachable!()
             }
-            if c.contains_id("object_name") {
-                obj_name = Some(c.get_one::<String>("object_name").unwrap().clone())
-            }
-            let result = modules::registry_graph::output(base_path, obj_type, obj_name);
-            output_result(result)
         }
         Some(("hierarchical_prefixes", c)) => {
             let result = match c.subcommand() {
