@@ -3,7 +3,8 @@ use crate::modules::util::BoxResult;
 use bgpkit_parser::models::{AsPath, Asn, AttributeValue, MrtMessage};
 use bgpkit_parser::{BgpkitParser, MrtRecord};
 use std::collections::HashMap;
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{thread, time};
 
@@ -39,12 +40,17 @@ fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<Ha
         .build()?;
 
     let mut result_map: HashMap<u32, u64> = HashMap::new();
+    let mut remaining_file_count = paths.len();
+
+    let cancelled = Arc::new(AtomicBool::new(false));
 
     let (tx, rx) = mpsc::channel();
 
     thread::scope(|ts| {
         ts.spawn(|| {
             for x in rx {
+                remaining_file_count -= 1 ;
+                eprintln!("Remaining files: {}", remaining_file_count);
                 for (t_asn, t_time) in x {
                     if let Some(global_data) = result_map.get_mut(&t_asn) {
                         if t_time > *global_data {
@@ -62,10 +68,16 @@ fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<Ha
             rayon::scope(|s| {
                 for path in paths {
                     let tx = tx.clone();
+                    let cancelled = cancelled.clone();
                     s.spawn(move |_| {
+                        if cancelled.load(Ordering::Relaxed) {
+                            return
+                        }
                         let mut x: HashMap<u32, u64> = HashMap::new();
                         if let Err(err) = analyze_mrt_file(path.to_str().unwrap_or_default(), &mut x, cutoff_time as u32) {
-                            panic!("Error parsing {:?}: {:?}", path, err);
+                            eprintln!("Error parsing {:?}: {:?}", path, err);
+                            cancelled.store(true, Ordering::Relaxed);
+                            return
                         }
                         tx.send(x).unwrap();
                     })
@@ -75,6 +87,9 @@ fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<Ha
         });
     });
 
+    if cancelled.load(Ordering::Relaxed) {
+        return Err("Cancelled due to error".into());
+    }
 
     Ok(result_map)
 }
@@ -102,7 +117,7 @@ fn analyze_mrt_file(path: &str, x: &mut HashMap<u32, u64>, cutoff_time: u32) -> 
         }
     }
     if !had_record {
-        panic!("No records found in MRT file: {}", path)
+        return Err("No records found".into());
     }
     eprintln!("Completed {}", path);
     Ok(())

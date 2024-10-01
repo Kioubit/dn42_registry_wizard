@@ -72,10 +72,12 @@ fn main() {
                 ]),
             Command::new("graph")
                 .about("Registry object output with forward and backlinks (JSON format)")
-                .arg(
+                .args([
                     Arg::new("graph_category")
-                        .help("Only output specific object types (i.e. aut-num)")
-                ),
+                        .help("Only output specific object types (i.e. aut-num)"),
+                    Arg::new("object_name")
+                        .help("Only output a specific object by name")
+                    ]),
             Command::new("hierarchical_prefixes")
                 .about("Hierarchical prefix tree output (JSON format)")
                 .subcommand_required(true)
@@ -194,10 +196,14 @@ fn main() {
         }
         Some(("graph", c)) => {
             let mut obj_type: Option<String> = None;
+            let mut obj_name: Option<String> = None;
             if c.contains_id("graph_category") {
                 obj_type = Some(c.get_one::<String>("graph_category").unwrap().clone())
             }
-            let result = modules::registry_graph::output(base_path, obj_type);
+            if c.contains_id("object_name") {
+                obj_name = Some(c.get_one::<String>("object_name").unwrap().clone())
+            }
+            let result = modules::registry_graph::output(base_path, obj_type, obj_name);
             output_result(result)
         }
         Some(("hierarchical_prefixes", c)) => {

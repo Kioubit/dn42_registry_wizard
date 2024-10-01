@@ -4,13 +4,12 @@ use std::{fs, io};
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
-
 pub type BoxResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
-#[derive(Debug, Clone)]
-pub enum EitherOr<X, Z> {
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum EitherOr<X, Y> {
     A(X),
-    B(Z),
+    B(Y),
 }
 
 pub fn read_lines<P>(path: P) -> io::Result<io::Lines<io::BufReader<File>>>

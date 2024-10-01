@@ -35,6 +35,47 @@ pub(crate) struct LinkedRegistryObject<M: ExtraDataTrait> {
     pub extra: M,
 }
 
+pub(crate) struct LinkIterator<'a, M: ExtraDataTrait> {
+    object: &'a LinkedRegistryObject<M>,
+    index: usize,
+    backlinks: bool
+}
+
+impl<'a, M: ExtraDataTrait> Iterator for LinkIterator<'a, M> {
+    type Item = Rc<LinkedRegistryObject<M>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let lo = if self.backlinks  {
+            &self.object.back_links.borrow()
+        } else {
+            &self.object.forward_links.borrow()
+        };
+        let l = lo.get(self.index);
+        self.index += 1;
+        match l {
+            Some(l) => Some(l.upgrade().unwrap()),
+            None => None
+        }
+    }
+}
+
+impl<M: ExtraDataTrait> LinkedRegistryObject<M>  {
+    pub fn get_back_links(&self) -> LinkIterator<M> {
+        LinkIterator {
+            object: &self,
+            index: 0,
+            backlinks: true,
+        }
+    }
+    pub fn get_forward_links(&self) -> LinkIterator<M> {
+        LinkIterator {
+            object: &self,
+            index: 0,
+            backlinks: false,
+        }
+    }
+}
+
 fn is_unit_type<T: Any>(_: &T) -> bool {
     std::any::TypeId::of::<T>() == std::any::TypeId::of::<()>()
 }
@@ -55,7 +96,7 @@ where
     link_array.serialize(s)
 }
 
-pub fn output(registry_root: String, obj_type: Option<String>) -> BoxResult<String> {
+pub fn output(registry_root: String, obj_type: Option<String>, object_name: Option<String>) -> BoxResult<String> {
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
     let graph = create_registry_graph::<()>(registry_root.to_owned(), &registry_schema)?;
     match obj_type {
@@ -63,7 +104,18 @@ pub fn output(registry_root: String, obj_type: Option<String>) -> BoxResult<Stri
             Ok(serde_json::to_string(&graph)?)
         }
         Some(s) => {
-            Ok(serde_json::to_string(&graph.get(&s).ok_or("object type not found")?)?)
+            match object_name {
+                None => {
+                    Ok(serde_json::to_string(&graph.get(&s).ok_or("object type not found")?)?)
+                }
+                Some(n) => {
+                    let r = &graph.get(&s)
+                        .ok_or("object type not found")?
+                        .iter().find(|x| x.object.filename == n)
+                        .ok_or("object by name not found");
+                    Ok(serde_json::to_string(r)?)
+                }
+            }
         }
     }
 }
@@ -71,7 +123,7 @@ pub fn output(registry_root: String, obj_type: Option<String>) -> BoxResult<Stri
 pub(crate) type RegistryGraph<M> = HashMap<String, Vec<Rc<LinkedRegistryObject<M>>>>;
 
 pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: String, registry_schema: &Vec<Schema>) -> BoxResult<RegistryGraph<M>> {
-    let mut object_list: HashMap<String, Vec<Rc<LinkedRegistryObject<M>>>> = HashMap::new();
+    let mut object_list: RegistryGraph<M> = HashMap::new();
 
     for schema in registry_schema {
         eprintln!("Reading {:?}", &("data/".to_owned() + &schema.name));
