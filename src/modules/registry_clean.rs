@@ -31,6 +31,7 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
     };
     let mnt_list = mnt_raw_list.split(",").collect::<Vec<&str>>();
     let only_one_mnt = matches!(mnt_list.len(), 1);
+    eprintln!("List contains {} maintainers", mnt_list.len());
 
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
 
@@ -48,9 +49,9 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
     }
 
     eprintln!("Analyzing dependency graph (2/6)");
-    // For every *unmarked* vertex
+    // For every *marked* vertex
     for mnt in mntner {
-        if mnt.extra.marked.get() {
+        if !mnt.extra.marked.get() {
             continue;
         }
         // Recursively follow each path while keeping track of visited vertices
@@ -64,15 +65,16 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
                 continue;
             }
 
-            // If a *marked* mntner vertex is encountered, unmark it and flag it for manual review
-            if obj.extra.marked.get() {
+            // If an *unmarked* mntner vertex is encountered, unmark self and flag for manual review
+            if !obj.extra.marked.get() && obj.category == "mntner"{
+                mnt.extra.marked.set(false);
                 eprintln!("Manual review: {} (First conflict with active MNT: {})",
-                          obj.object.filename, mnt.object.filename
+                          mnt.object.filename, obj.object.filename
                 );
-                if only_one_mnt {
+                if only_one_mnt && !with_subgraph_check{
                     return Err("Manual review needed".into());
                 }
-                obj.extra.marked.set(false);
+                break
             }
 
             link_recurse(&obj, &mut visited, &mut to_visit);
