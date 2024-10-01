@@ -117,7 +117,7 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             let mut found = false;
             for reference in w_item.back_links.borrow().iter()
                 .chain(w_item.forward_links.borrow().iter()) {
-                if reference.extra.deleted.get() {
+                if reference.upgrade().unwrap().extra.deleted.get() {
                     continue;
                 }
                 found = true;
@@ -140,11 +140,11 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
         let mut has_links = false;
         for link in item.back_links.borrow().iter()
             .chain(item.forward_links.borrow().iter()) {
-            if !link.extra.deleted.get() {
+            if !link.upgrade().unwrap().extra.deleted.get() {
                 has_links = true;
                 continue;
             }
-            output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.object.filename, item.category, item.object.filename));
+            output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.upgrade().unwrap().object.filename, item.category, item.object.filename));
         }
 
         if !has_links {
@@ -179,8 +179,8 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
                 continue;
             }
             if !item.forward_links.borrow().iter()
-                .filter(|x| !x.extra.deleted.get())
-                .any(|x| x.category == *required_category) {
+                .filter(|x| !x.upgrade().unwrap().extra.deleted.get())
+                .any(|x| x.upgrade().unwrap().category == *required_category) {
                 // If we don't find a link with the required category
                 required_category_missing = true;
                 break;
@@ -245,7 +245,7 @@ fn link_recurse(obj: &Rc<LinkedRegistryObject<MetaData>>,
         let mut found = false;
         for visited in &mut *visited {
             // Do not visit a vertex twice
-            if Rc::ptr_eq(link, visited) {
+            if Rc::ptr_eq(&link.upgrade().unwrap(), visited) {
                 found = true;
                 break;
             }
@@ -255,7 +255,7 @@ fn link_recurse(obj: &Rc<LinkedRegistryObject<MetaData>>,
         }
 
         // If not visited already
-        visited.push(link.clone());
-        to_visit.push(link.clone());
+        visited.push(link.upgrade().unwrap());
+        to_visit.push(link.upgrade().unwrap());
     }
 }

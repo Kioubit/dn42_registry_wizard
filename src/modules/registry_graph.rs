@@ -1,11 +1,11 @@
-use std::any::Any;
 use crate::modules::object_reader::{read_registry_objects, RegistryObject};
 use crate::modules::util::BoxResult;
 use serde::Serialize;
+use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 #[derive(Debug)]
 pub(crate) struct Schema {
@@ -28,9 +28,9 @@ pub(crate) struct LinkedRegistryObject<M: ExtraDataTrait> {
     pub category: String,
     pub object: RegistryObject,
     #[serde(serialize_with = "links_serialize")]
-    pub forward_links: RefCell<Vec<Rc<LinkedRegistryObject<M>>>>,
+    pub forward_links: RefCell<Vec<Weak<LinkedRegistryObject<M>>>>,
     #[serde(serialize_with = "links_serialize")]
-    pub back_links: RefCell<Vec<Rc<LinkedRegistryObject<M>>>>,
+    pub back_links: RefCell<Vec<Weak<LinkedRegistryObject<M>>>>,
     #[serde(skip_serializing_if = "is_unit_type")]
     pub extra: M,
 }
@@ -39,15 +39,17 @@ fn is_unit_type<T: Any>(_: &T) -> bool {
     std::any::TypeId::of::<T>() == std::any::TypeId::of::<()>()
 }
 
-fn links_serialize<S, M>(x: &RefCell<Vec<Rc<LinkedRegistryObject<M>>>>, s: S) -> Result<S::Ok, S::Error>
+fn links_serialize<S, M>(x: &RefCell<Vec<Weak<LinkedRegistryObject<M>>>>, s: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
     M: ExtraDataTrait,
 {
     let link_array = x.borrow()
         .iter()
-        .map(|x| {
-            format!("{}/{}", &x.category, &x.object.filename)
+        .filter_map(|x| {
+            x.upgrade().and_then(| x| {
+                format!("{}/{}", x.category, x.object.filename).into()
+            })
         })
         .collect::<Vec<_>>();
     link_array.serialize(s)
@@ -131,13 +133,13 @@ pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: String, re
                         let mut current_obj_forward_links = object.forward_links.borrow_mut();
                         let mut found = false;
                         for obj in current_obj_forward_links.iter() {
-                            if Rc::ptr_eq(obj, target_object.unwrap()) {
+                            if Rc::ptr_eq(&obj.upgrade().unwrap(), target_object.unwrap()) {
                                 found = true;
                                 break;
                             }
                         }
                         if !found {
-                            current_obj_forward_links.push(target_object.unwrap().clone());
+                            current_obj_forward_links.push(Rc::downgrade(target_object.unwrap()));
                         }
                     }
                     // ----------------------------
@@ -147,13 +149,13 @@ pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: String, re
                         let mut target_obj_back_links = target_object.unwrap().back_links.borrow_mut();
                         let mut found = false;
                         for obj in target_obj_back_links.iter() {
-                            if Rc::ptr_eq(obj, object) {
+                            if Rc::ptr_eq(&obj.upgrade().unwrap(), object) {
                                 found = true;
                                 break;
                             }
                         }
                         if !found {
-                            target_obj_back_links.push(object.clone());
+                            target_obj_back_links.push(Rc::downgrade(object));
                         }
                     }
                     // ----------------------------
