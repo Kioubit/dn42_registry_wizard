@@ -16,67 +16,51 @@ static STATIC_ENTRIES: [(&str, &str); 7] = [
 ];
 
 
-pub fn output_forward_zones_legacy(registry_root: String, auth_servers: Vec<String>) {
-    let mut objects = read_tld_objects(registry_root, true).expect("Error reading objects");
+pub fn output_forward_zones(registry_root: String, auth_servers: Vec<String>) -> BoxResult<String> {
+    let mut output = String::new();
+    let mut objects = read_tld_objects(registry_root, true)
+        .map_err(|e| format!("Error reading objects: {}", e))?;
     objects.sort_by(|a, b| a.tld.cmp(&b.tld));
-    let mut first = true;
+    output += "recursor:\n";
+    output += "  forward_zones:\n";
     for object in objects {
         let current_auth_servers: Vec<String> = if object.n_server_v4.is_empty() && object.n_server_v6.is_empty() {
             auth_servers.iter().map(|s| {
-                let parsed = IpAddr::from_str(s).expect("Could not parse provided authoritative server IP");
-                parsed.to_string()
-            }).collect()
-        } else {
-            object.n_server_v4.into_iter().chain(object.n_server_v6.into_iter()).collect()
-        };
-        for auth_server in current_auth_servers {
-            if first {
-                println!("forward-zones={}={}", object.tld, auth_server);
-                first = false;
-            }
-            println!("forward-zones+={}={}", object.tld, auth_server);
-        }
-    }
-}
-
-
-pub fn output_forward_zones(registry_root: String, auth_servers: Vec<String>) {
-    let mut objects = read_tld_objects(registry_root, true).expect("Error reading objects");
-    objects.sort_by(|a, b| a.tld.cmp(&b.tld));
-    println!("recursor:");
-    println!("  forward_zones:");
-    for object in objects {
-        let current_auth_servers: Vec<String> = if object.n_server_v4.is_empty() && object.n_server_v6.is_empty() {
-            auth_servers.iter().map(|s| {
-                let parsed = IpAddr::from_str(s).expect("Could not parse provided authoritative server IP");
-                if parsed.is_ipv6() {
-                    String::from('\'') + &*parsed.to_string() + "\'"
-                } else {
-                    parsed.to_string()
-                }
-            }).collect()
+                IpAddr::from_str(s)
+                    .map(|parsed| {
+                        if parsed.is_ipv6() {
+                            String::from('\'') + &*parsed.to_string() + "\'"
+                        } else {
+                            parsed.to_string()
+                        }
+                    }).map_err(|e| format!("Could not parse provided authoritative server IP {}", e))
+            }).collect::<Result<Vec<String>, String>>()?
         } else {
             object.n_server_v4.into_iter().chain(object.n_server_v6.into_iter().map(|s| "'".to_owned() + &*s + "'")).collect()
         };
-        println!("  - zone: '{}'", object.tld);
-        println!("    forwarders:");
+        output += format!("  - zone: '{}'\n", object.tld).as_str();
+        output += "    forwarders:\n";
         for auth_server in current_auth_servers {
-            println!("    - {}", auth_server);
+            output += format!("    - {}\n", auth_server).as_str();
         }
     }
+    Ok(output)
 }
 
-pub fn output_tas(registry_root: String) {
-    let objects = read_tld_objects(registry_root, false).expect("Error reading objects");
+pub fn output_tas(registry_root: String) -> BoxResult<String> {
+    let mut output = String::new();
+    let objects = read_tld_objects(registry_root, false)
+        .map_err(|e| format!("Error reading objects: {}", e))?;
     for object in objects {
         if object.ds_rdata.is_empty() {
-            println!("addNTA(\"{}\")", object.tld);
+            output+= format!("addNTA(\"{}\")\n", object.tld).as_str();
             continue;
         }
         for ta in object.ds_rdata {
-            println!("addTA('{}',\"{}\")", object.tld, ta);
+            output += format!("addTA('{}',\"{}\")\n", object.tld, ta).as_str();
         }
-    }
+    };
+    Ok(output)
 }
 
 #[derive(Debug)]
