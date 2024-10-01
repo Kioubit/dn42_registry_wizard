@@ -1,7 +1,9 @@
+use std::io::Write;
+use std::io;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use roa_wizard_lib::{generate_bird, generate_json};
 use std::process::exit;
-use crate::modules::util::EitherOr;
+use crate::modules::util::{BoxResult, EitherOr};
 
 mod modules;
 
@@ -41,14 +43,6 @@ fn main() {
                 .subcommand_required(true)
                 .subcommands([
                     Command::new("zones").about("Output zone files")
-                        .arg(
-                            Arg::new("authoritative_servers")
-                                .help("List of default authoritative servers (comma separated)")
-                                .required(true)
-                                .num_args(1..)
-                        ),
-                    Command::new("zones-legacy")
-                        .about("Output legacy zone files")
                         .arg(
                             Arg::new("authoritative_servers")
                                 .help("List of default authoritative servers (comma separated)")
@@ -169,15 +163,11 @@ fn main() {
         Some(("dns", c)) => {
             match c.subcommand() {
                 Some(("zones", d)) => {
-                    let auth_servers: Vec<&String> = d.get_many("authoritative_servers").unwrap().collect();
-                    modules::zone_files::output_forward_zones(base_path, auth_servers.into_iter().map(|v| v.to_string()).collect());
-                }
-                Some(("zones-legacy", d)) => {
-                    let auth_servers: Vec<&String> = d.get_many("authoritative_servers").unwrap().collect();
-                    modules::zone_files::output_forward_zones_legacy(base_path, auth_servers.into_iter().map(|v| v.to_string()).collect());
+                    let auth_servers: Vec<String> = d.get_many("authoritative_servers").unwrap().cloned().collect();
+                    output_result(modules::zone_files::output_forward_zones(base_path, auth_servers));
                 }
                 Some(("tas", _)) => {
-                    modules::zone_files::output_tas(base_path);
+                    output_result(modules::zone_files::output_tas(base_path));
                 }
                 _ => unreachable!()
             }
@@ -200,11 +190,7 @@ fn main() {
             let result = modules::object_metadata::output(
                 base_path, object_type, exclusive_fields, filtered_fields, skip_empty
             );
-            if result.is_err() {
-                println!("{}", result.unwrap_err());
-                exit(1);
-            }
-            println!("{}", result.unwrap());
+            output_result(result)
         }
         Some(("graph", c)) => {
             let mut obj_type: Option<String> = None;
@@ -212,11 +198,7 @@ fn main() {
                 obj_type = Some(c.get_one::<String>("graph_category").unwrap().clone())
             }
             let result = modules::registry_graph::output(base_path, obj_type);
-            if result.is_err() {
-                println!("{}", result.unwrap_err());
-                exit(1);
-            }
-            println!("{}", result.unwrap());
+            output_result(result)
         }
         Some(("hierarchical_prefixes", c)) => {
             let result = match c.subcommand() {
@@ -228,11 +210,7 @@ fn main() {
                 }
                 _ => unreachable!()
             };
-            if result.is_err() {
-                println!("{}", result.unwrap_err());
-                exit(1);
-            }
-            println!("{}", result.unwrap());
+            output_result(result)
         }
         Some(("remove_mnt", c)) => {
             let input: EitherOr<String, String> = if c.contains_id("list_file") {
@@ -245,11 +223,7 @@ fn main() {
 
             let enable_subgraph_check = *c.get_one::<bool>("enable_subgraph_check").unwrap();
             let result = modules::registry_clean::output(base_path, input, enable_subgraph_check);
-            if result.is_err() {
-                println!("{}", result.unwrap_err());
-                exit(1);
-            }
-            println!("{}", result.unwrap());
+            output_result(result)
         }
         Some(("mrt_activity", c)) => {
             let result = match c.subcommand() {
@@ -265,12 +239,16 @@ fn main() {
                 }
                 _ => unreachable!()
             };
-            if result.is_err() {
-                println!("{}", result.unwrap_err());
-                exit(1);
-            }
-            println!("{}", result.unwrap());
+            output_result(result)
         }
         _ => unreachable!()
     }
+}
+
+fn output_result(result: BoxResult<String>) {
+    if result.is_err() {
+        writeln!(io::stderr(), "{}", result.unwrap_err()).ok();
+        exit(1);
+    }
+    writeln!(io::stdout(), "{}", result.unwrap()).ok();
 }
