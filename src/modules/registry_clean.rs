@@ -231,7 +231,7 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             
             if let Some(m) =  obj.object.key_value.get("mnt-by") {
                 if m.iter().any(|m| m == "DN42-MNT") {
-                    // SKIP DN42-MNT
+                    // Skip sub-graphs containing DN42-MNT
                     graph_has_asn = true;
                     break;
                 }

@@ -21,17 +21,19 @@ pub fn output(mrt_root: String, max_inactive_secs: u64) -> BoxResult<String> {
 
 pub fn get_cutoff_time(max_inactive_secs: u64) -> u64 {
     if max_inactive_secs == 0 {
+        eprintln!("Cutoff time: not set");
         0
     } else {
         let mut time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         time -= time::Duration::new(max_inactive_secs, 0);
-        time.as_secs()
+        let cutoff_time = time.as_secs();
+        eprintln!("Cutoff time: {}", cutoff_time);
+        cutoff_time
     }
 }
 
 fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<HashMap<u32, u64>> {
     let cutoff_time = get_cutoff_time(max_inactive_secs);
-    eprintln!("Cutoff time: {}", cutoff_time);
 
     let paths = util::walk_dir(mrt_root, 10)?;
 

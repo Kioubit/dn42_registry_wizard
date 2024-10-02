@@ -9,36 +9,30 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
     let mut active_asn: HashMap<u32, u64> = serde_json::from_str(json_str.as_str())?;
 
     let cutoff_time = crate::modules::mrt_activity::get_cutoff_time(max_inactive_secs);
-    eprintln!("Cutoff time: {}", cutoff_time);
-
     active_asn.retain(|_, t| *t >= cutoff_time);
-
-    let mut inactive_mnt_list: Vec<String> = Vec::new();
-
+    
     let mut aut_nums = read_registry_objects(registry_root.clone(), "data/aut-num/", false)?;
     filter_objects_source(&mut aut_nums, String::from("DN42"));
 
+    // ------------------------------------------------------------
     let mut inactive_aut_nums: Vec<RegistryObject> = Vec::new();
     let mut active_aut_nums: Vec<RegistryObject> = Vec::new();
-
     for obj in aut_nums {
-        let mnt_list = obj.key_value.get("mnt-by");
-        if mnt_list.is_none() {
-            active_aut_nums.push(obj);
-            continue;
-        };
-        if mnt_list.unwrap().contains(&String::from("DN42-MNT")) {
-            active_aut_nums.push(obj);
+        let primary = obj.key_value.get("aut-num").and_then(|x| x.first());
+        if primary.is_none() {
+            eprintln!("Error: aut-num key missing for {}", obj.filename);
             continue;
         }
-        let asn_str = obj.filename.strip_prefix("AS");
+
+        let asn_str = primary.unwrap().strip_prefix("AS");
         if asn_str.is_none() {
-            active_aut_nums.push(obj);
+            eprintln!("Error: Invalid aut-num key for {}", obj.filename);
             continue;
         };
+
         let asn_u32 = asn_str.unwrap().parse::<u32>();
         if asn_u32.is_err() {
-            active_aut_nums.push(obj);
+            eprintln!("Error: Invalid aut-num key for {}", obj.filename);
             continue;
         };
 
@@ -48,24 +42,33 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
             inactive_aut_nums.push(obj);
         }
     }
+    // ------------------------------------------------------------
 
+    let mut inactive_mnt_list: Vec<String> = Vec::new();
 
     for aut_num in inactive_aut_nums {
         let asn_path = &format!("data/aut-num/{}", aut_num.filename);
         if get_last_git_activity(&registry_root, asn_path)? >= cutoff_time {
+            active_aut_nums.push(aut_num);
             continue;
         }
 
         if let Some(mnt_by_list) = aut_num.key_value.get("mnt-by") {
             inactive_mnt_list.append(&mut mnt_by_list.clone());
         } else {
+            eprintln!("Error: mnt-by list is empty for {}", aut_num.filename);
             continue;
         }
     }
 
+    // Ensure no duplicate mnt entries so that they can be removed with swap_remove()
+    inactive_mnt_list.sort_unstable();
+    inactive_mnt_list.dedup();
+
     for active_aut_num in active_aut_nums {
         let mnt_list = active_aut_num.key_value.get("mnt-by");
         if mnt_list.is_none() {
+            eprintln!("Error: mnt-by list is empty for {}", active_aut_num.filename);
             continue;
         }
         for active_mnt in mnt_list.unwrap() {
@@ -75,9 +78,10 @@ pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) 
         }
     }
 
-
-    inactive_mnt_list.sort_unstable();
-    inactive_mnt_list.dedup();
+    // Ensure DN42-MNT is not in the list
+    if let Some(index) = inactive_mnt_list.iter().position(|val| val == "DN42-MNT") {
+        inactive_mnt_list.swap_remove(index);
+    }
 
     let output = inactive_mnt_list.join(",");
     Ok(output)
