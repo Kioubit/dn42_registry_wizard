@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::rc::{Rc, Weak};
+use crate::modules::registry_graphviz::create_graphviz;
 
 #[derive(Debug)]
 pub(crate) struct Schema {
@@ -122,6 +123,7 @@ pub fn output_list(registry_root: String, obj_type: Option<String>, object_name:
 
 pub fn output_related(registry_root: String, obj_type: String,
                       obj_name: String, enforce_mnt_by: Option<String>, only_related_to_mnt: Option<String>,
+                      graphviz: bool
 ) -> BoxResult<String> {
     let schema = parse_registry_schema(registry_root.to_owned())?;
     let graph = create_registry_graph::<()>(registry_root, &schema)?;
@@ -156,7 +158,18 @@ pub fn output_related(registry_root: String, obj_type: String,
             true
         });
     }
-
+    
+    if graphviz {
+        let mnt = if only_related_to_mnt.is_some() {
+            only_related_to_mnt
+        } else if enforce_mnt_by.is_some() { 
+            enforce_mnt_by
+        } else { 
+            None
+        };
+        return create_graphviz(visited.clone(), mnt);
+    }
+    
     let result: Vec<_> = visited.iter()
         .map(|x| format!("{}/{}", x.category, x.object.filename))
         .collect();

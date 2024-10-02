@@ -99,6 +99,11 @@ fn main() {
                                 .help("Only show objects that are maintained by the specified mnt or that are directly related")
                                 .long("related-mnt-by")
                                 .short('r'),
+                            Arg::new("graphviz")
+                                .help("Output graphviz dot")
+                                .long("graphviz")
+                                .short('g')
+                                .action(ArgAction::SetTrue),
                         ])
                         .group(ArgGroup::new("input_group")
                             .args(["enforce_mnt_by", "related_mnt_by"])
@@ -247,7 +252,8 @@ fn main() {
                     } else {
                         None
                     };
-                    let result = modules::registry_graph::output_related(base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by);
+                    let graphviz = *c.get_one::<bool>("graphviz").unwrap();
+                    let result = modules::registry_graph::output_related(base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, graphviz);
                     output_result(result)
                 }
                 _ => unreachable!()

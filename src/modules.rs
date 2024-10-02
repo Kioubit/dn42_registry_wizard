@@ -7,3 +7,4 @@ pub(crate) mod object_metadata;
 pub mod mrt_registry;
 pub mod registry_graph;
 pub mod registry_clean;
+mod registry_graphviz;
