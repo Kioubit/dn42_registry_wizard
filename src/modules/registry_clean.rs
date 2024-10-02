@@ -63,6 +63,10 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
                 continue;
             }
+            if &obj.category == "aut-num" && obj.object.filename == "AS0" {
+                // Special case
+                continue;
+            }
 
             // If an *unmarked* mntner vertex is encountered, unmark self and flag for manual review
             if !obj.extra.marked.get() && obj.category == "mntner" {
@@ -95,6 +99,10 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
 
         while let Some(obj) = to_visit.pop() {
             if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
+                continue;
+            }
+            if &obj.category == "aut-num" && obj.object.filename == "AS0" {
+                // Special case
                 continue;
             }
             if obj.extra.deleted.get() {
@@ -219,6 +227,14 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
             if obj.category == "aut-num" {
                 graph_has_asn = true;
                 break;
+            }
+            
+            if let Some(m) =  obj.object.key_value.get("mnt-by") {
+                if m.iter().any(|m| m == "DN42-MNT") {
+                    // SKIP DN42-MNT
+                    graph_has_asn = true;
+                    break;
+                }
             }
 
             link_recurse(&obj, &mut visited, &mut to_visit);
