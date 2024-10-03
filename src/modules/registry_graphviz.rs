@@ -76,6 +76,5 @@ impl<'a> dot::Labeller<'a, Nd, Ed> for Graph {
 pub fn create_graphviz(a: Vec<Nd>, mnt: Option<String>) -> BoxResult<String> {
     let mut buffer = Vec::new();
     dot::render(&Graph{nodes: a, mnt}, &mut buffer)?;
-    std::fs::write("graphviz.txt", &buffer)?;
     Ok(String::from_utf8(buffer)?)
 }

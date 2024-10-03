@@ -97,19 +97,32 @@ where
     link_array.serialize(s)
 }
 
-pub fn output_list(registry_root: String, obj_type: Option<String>, object_name: Option<String>) -> BoxResult<String> {
+pub fn output_list(registry_root: String, obj_type: Option<String>, object_name: Option<String>, graphviz: bool) -> BoxResult<String> {
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
     let graph = create_registry_graph::<()>(registry_root.to_owned(), &registry_schema)?;
     match obj_type {
         None => {
-            Ok(serde_json::to_string(&graph)?)
+            if graphviz {
+                let full = graph.iter().flat_map(|vec| vec.1).cloned().collect::<Vec<_>>();
+                Ok(create_graphviz(full, None)?)
+            } else {
+                Ok(serde_json::to_string(&graph)?)
+            }
         }
         Some(s) => {
             match object_name {
                 None => {
-                    Ok(serde_json::to_string(&graph.get(&s).ok_or("object type not found")?)?)
+                    let v = graph.get(&s).ok_or("object type not found")?;
+                    if graphviz {
+                        Ok(create_graphviz(v.to_vec(), None)?)
+                    } else {
+                        Ok(serde_json::to_string(v)?)
+                    }
                 }
                 Some(n) => {
+                    if graphviz {
+                        return Err("Cannot use the graphviz option in combination with object_name".into());
+                    }
                     let r = &graph.get(&s)
                         .ok_or("object type not found")?
                         .iter().find(|x| x.object.filename == n)

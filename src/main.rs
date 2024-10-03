@@ -80,7 +80,12 @@ fn main() {
                             Arg::new("object_type")
                                 .help("Only output specific object types (i.e. aut-num)"),
                             Arg::new("object_name")
-                                .help("Only output a specific object by name")
+                                .help("Only output a specific object by name"),
+                            Arg::new("graphviz")
+                                .help("Output graphviz dot")
+                                .long("graphviz")
+                                .short('g')
+                                .action(ArgAction::SetTrue),
                         ]),
                     Command::new("related")
                         .about("Show all related objects to a specified one")
@@ -230,13 +235,15 @@ fn main() {
                 Some(("list", c)) => {
                     let mut obj_type: Option<String> = None;
                     let mut obj_name: Option<String> = None;
+                    let graphviz = *c.get_one::<bool>("graphviz").unwrap();
                     if c.contains_id("object_type") {
-                        obj_type = Some(c.get_one::<String>("object_type").unwrap().clone())
+                        obj_type = Some(c.get_one::<String>("object_type").unwrap().clone());
                     }
                     if c.contains_id("object_name") {
-                        obj_name = Some(c.get_one::<String>("object_name").unwrap().clone())
+                        obj_name = Some(c.get_one::<String>("object_name").unwrap().clone());
                     }
-                    let result = modules::registry_graph::output_list(base_path, obj_type, obj_name);
+                    
+                    let result = modules::registry_graph::output_list(base_path, obj_type, obj_name, graphviz);
                     output_result(result)
                 }
                 Some(("related", c)) => {
