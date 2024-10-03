@@ -7,6 +7,7 @@ use std::process::Command;
 pub fn output(registry_root: String, json_file: String, max_inactive_secs: u64) -> BoxResult<String> {
     let json_str = util::read_lines(json_file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n");
     let mut active_asn: HashMap<u32, u64> = serde_json::from_str(json_str.as_str())?;
+    eprintln!("Active ASN count: {}", active_asn.len());
 
     let cutoff_time = crate::modules::mrt_activity::get_cutoff_time(max_inactive_secs);
     active_asn.retain(|_, t| *t >= cutoff_time);
