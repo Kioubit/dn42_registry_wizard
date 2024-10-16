@@ -1,6 +1,9 @@
 use std::cell::Cell;
+use std::collections::HashMap;
+use std::process::Command;
 use std::rc::Rc;
 use serde::Serialize;
+use crate::modules::mrt_activity::get_cutoff_time;
 use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkedRegistryObject, ExtraDataTrait, link_recurse, WEAKLY_REFERENCING};
 use crate::modules::util;
 use crate::modules::util::{BoxResult, EitherOr};
@@ -13,51 +16,111 @@ struct MetaData {
 }
 impl ExtraDataTrait for MetaData {}
 
-pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_subgraph_check: bool) -> BoxResult<String> {
+pub fn output(registry_root: String, mnt_input: Option<EitherOr<String, String>>,
+              asn_input: Option<String>,
+              asn_max_inactive_secs: Option<u64>,
+              with_subgraph_check: bool) -> BoxResult<String> {
     if !with_subgraph_check {
         eprintln!("Warning: Subgraph check has been disabled")
     }
 
     let mut output = String::new();
-
-    let mnt_raw_list = match mnt_input {
-        EitherOr::A(file) => {
-            util::read_lines(file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n")
-        }
-        EitherOr::B(list) => {
-            list
-        }
-    };
-    let mnt_list = mnt_raw_list.split(",").collect::<Vec<&str>>();
-    let only_one_mnt = matches!(mnt_list.len(), 1);
-    eprintln!("List contains {} maintainers", mnt_list.len());
-
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
-
     let graph = create_registry_graph::<MetaData>(registry_root.to_owned(), &registry_schema)?;
-    let mntner = graph.get("mntner").ok_or("mntner not found")?;
+
+    let mut removal_list: Vec<String>;
+    let removal_category: String;
+    let affected_graph;
+
+    if let Some(mnt_input) = mnt_input {
+        removal_category = "mntner".to_string();
+        let mnt_raw_list = match mnt_input {
+            EitherOr::A(file) => {
+                util::read_lines(file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n")
+            }
+            EitherOr::B(list) => {
+                list
+            }
+        };
+        removal_list = mnt_raw_list.split(",").map(String::from).collect();
+        affected_graph = graph.get("mntner").ok_or("mntner graph not found")?;
+    } else if let Some(asn_input) = asn_input {
+        removal_category = "aut-num".to_string();
+        affected_graph = graph.get("aut-num").ok_or("aut-num graph not found")?;
+        let json_str = util::read_lines(asn_input)?.map_while(Result::ok).collect::<Vec<String>>().join("\n");
+        let mut active_asn: HashMap<u32, u64> = serde_json::from_str(json_str.as_str())?;
+
+        let asn_cutoff_time = asn_max_inactive_secs.and_then(|x| {
+            if x == 0 {
+                return None;
+            }
+            Some(get_cutoff_time(x))
+        });
+        if let Some(cutoff_time) = asn_cutoff_time {
+            active_asn.retain(|_, t| *t >= cutoff_time);
+        }
+
+        eprintln!("Active ASN count: {}", active_asn.len());
+        let active_asn = active_asn.keys().map(|x| format!("AS{}", x)).collect::<Vec<String>>();
+        removal_list = affected_graph.iter()
+            .map(|x| x.object.filename.clone())
+            .filter(|x| !active_asn.contains(x))
+            .collect();
+        if let Some(cutoff_time) = asn_cutoff_time {
+            eprintln!("Checking git activity log");
+            let mut had_errors = false;
+            removal_list.retain(|s| {
+                let asn_path = &format!("data/aut-num/{}", s);
+                let last_activity = get_last_git_activity(&registry_root, asn_path);
+                if last_activity.is_err() {
+                    had_errors = true;
+                    eprintln!("Error getting last git activity for: {} - {}", asn_path, last_activity.unwrap_err());
+                    return false;
+                }
+                if last_activity.unwrap() < cutoff_time {
+                    return true;
+                }
+                false
+            });
+            if had_errors {
+                return Err("errors getting git activity".into());
+            }
+        }
+        eprintln!("Final removal list: {}", removal_list.join(","));
+    } else {
+        unreachable!("invalid function usage")
+    }
+
+
+    let only_one_removal_item = matches!(removal_list.len(), 1);
+    eprintln!("Trying to remove {} objects", removal_list.len());
 
     // Assuming the registry objects form an undirected graph which is a superset of many disconnected sub-graphs
-    // Mark all mntner vertices to delete
+    // Mark all mntner/aut-num vertices to delete
     eprintln!("Analyzing dependency graph (1/6)");
-    for mnt in mntner {
-        let mnt = mnt.clone();
-        if mnt_list.contains(&&*mnt.object.filename) {
-            mnt.extra.marked.set(true);
+    for t in affected_graph {
+        let t = t.clone();
+        if removal_list.contains(&t.object.filename) {
+            t.extra.marked.set(true);
         }
     }
 
+    // Ensure DN42-MNT is not marked
+    graph.get("mntner").ok_or("mntner graph not found")?.iter()
+        .find(|x| x.object.filename == "DN42-MNT")
+        .ok_or("DN42-MNT not found")?.extra.marked.set(false);
+
     eprintln!("Analyzing dependency graph (2/6)");
     // For every *marked* vertex
-    for mnt in mntner {
-        if !mnt.extra.marked.get() {
+    for t in affected_graph {
+        if !t.extra.marked.get() {
             continue;
         }
         // Recursively follow each path while keeping track of visited vertices
         let mut visited: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
         let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
-        visited.push(mnt.clone());
-        to_visit.push(mnt.clone());
+        visited.push(t.clone());
+        to_visit.push(t.clone());
 
         while let Some(obj) = to_visit.pop() {
             if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
@@ -68,13 +131,18 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
                 continue;
             }
 
-            // If an *unmarked* mntner vertex is encountered, unmark self and flag for manual review
-            if !obj.extra.marked.get() && obj.category == "mntner" {
-                mnt.extra.marked.set(false);
-                eprintln!("Manual review: {} (First conflict with active MNT: {})",
-                          mnt.object.filename, obj.object.filename
-                );
-                if only_one_mnt && !with_subgraph_check {
+            // If an *unmarked* mntner/aut-num vertex is encountered, unmark self and flag for manual review
+            let empty_vec : Vec<String> = Vec::with_capacity(0);
+            if !obj.extra.marked.get() && obj.category == removal_category {
+                t.extra.marked.set(false);
+                let t_mnt = t.object.key_value.get("mnt-by").unwrap_or(&empty_vec);
+                if !t_mnt.contains(&String::from("DN42-MNT")) {
+                    eprintln!("Manual review: {} - {:?} (First conflict with active object: {} - {:?})",
+                              t.object.filename, t_mnt,
+                              obj.object.filename, obj.object.key_value.get("mnt-by").unwrap_or(&empty_vec)
+                    );
+                }
+                if only_one_removal_item && !with_subgraph_check {
                     return Err("Manual review needed".into());
                 }
                 break;
@@ -86,16 +154,16 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
 
 
     eprintln!("Analyzing dependency graph (3/6)");
-    // For every *still marked* mntner vertex: Recursively delete all vertices
+    // For every *still marked* mntner/aut-num vertex: Recursively delete all vertices
     // Recursively follow each path while keeping track of visited vertices
-    for mnt in mntner {
-        if !mnt.extra.marked.get() {
+    for t in affected_graph {
+        if !t.extra.marked.get() {
             continue;
         }
         let mut visited: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
         let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
-        visited.push(mnt.clone());
-        to_visit.push(mnt.clone());
+        visited.push(t.clone());
+        to_visit.push(t.clone());
 
         while let Some(obj) = to_visit.pop() {
             if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
@@ -251,4 +319,25 @@ pub fn output(registry_root: String, mnt_input: EitherOr<String, String>, with_s
     }
 
     Ok(output)
+}
+
+
+fn get_last_git_activity(registry_root: &str, path: &str) -> BoxResult<u64> {
+    let cmd_output = Command::new("git")
+        .arg("log")
+        .arg("-1")
+        .arg("--format=%ct")
+        .arg(path)
+        .current_dir(registry_root)
+        .output()?;
+    if !cmd_output.status.success() {
+        eprintln!("{:?}", String::from_utf8_lossy(&cmd_output.stderr));
+        return Err("git log failed".into());
+    }
+    let output = String::from_utf8(cmd_output.stdout)?;
+    let output_clean = match output.strip_suffix('\n') {
+        Some(s) => s,
+        None => output.as_str()
+    };
+    Ok(output_clean.parse::<u64>()?)
 }

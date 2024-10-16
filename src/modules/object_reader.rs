@@ -143,6 +143,7 @@ pub fn read_registry_object_kv_filtered(path: PathBuf, exclusive_fields: &Option
     Ok(map)
 }
 
+#[allow(dead_code)]
 pub fn filter_objects_source(objects: &mut Vec<RegistryObject>, source: String) {
     objects.retain(|obj| obj.key_value.get("source").is_some_and(|x| x.first() == Some(&source)));
 }

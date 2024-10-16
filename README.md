@@ -11,8 +11,8 @@ Commands:
   object_metadata        Object metadata output (JSON format)
   graph                  Registry object output with forward and backlinks (JSON format)
   hierarchical_prefixes  Hierarchical prefix tree output (JSON format)
-  remove_mnt             Remove a list of maintainers along with all their objects from the registry
-  mrt_activity           Output last seen time for active ASNs in MRT RIB dumps. List inactive maintainers.
+  remove                 Remove a list of registry objects along with all their dependencies
+  mrt_activity           Output active ASNs from MRT RIB dumps along with their last seen time
   help                   Print this message or the help of the given subcommand(s)
 
 Arguments:
