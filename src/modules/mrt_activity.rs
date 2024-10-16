@@ -8,15 +8,14 @@ use std::sync::{mpsc, Arc};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{thread, time};
 
-pub fn output(mrt_root: String, max_inactive_secs: u64) -> BoxResult<String> {
-    let mut output = String::new();
-
+pub fn output(mrt_root: String, max_inactive_secs: u64, output_as_list: bool) -> BoxResult<String> {
     let active_asn = get_active_asn_list(mrt_root, max_inactive_secs)?;
-    let active_json = serde_json::to_string(&active_asn)?;
-    output.push_str(&active_json);
-    output.push('\n');
-
-    Ok(output)
+    if output_as_list {
+        Ok(active_asn.keys().map(|key| key.to_string()).collect::<Vec<String>>().join(","))
+    } else {
+        let active_json = serde_json::to_string(&active_asn)?;
+        Ok(active_json)
+    }
 }
 
 pub fn get_cutoff_time(max_inactive_secs: u64) -> u64 {

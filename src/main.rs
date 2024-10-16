@@ -1,9 +1,10 @@
 use crate::modules::util::{BoxResult, EitherOr};
-use clap::{Arg, ArgAction, ArgGroup, Command};
+use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Command};
 use roa_wizard_lib::{generate_bird, generate_json};
 use std::io;
 use std::io::Write;
 use std::process::exit;
+use crate::modules::registry_remove::RemovalCategory;
 
 mod modules;
 
@@ -135,9 +136,9 @@ fn main() {
                             Arg::new("list")
                                 .long("list")
                                 .short('l')
-                                .help("comma-separated list of maintainers to remove"),
+                                .help("Comma-separated list of maintainers to remove"),
                             Arg::new("enable_subgraph_check")
-                                .help("enable check for invalid sub-graphs")
+                                .help("Enable check for invalid sub-graphs")
                                 .long("enable_subgraph_check")
                                 .short('s')
                                 .action(ArgAction::SetTrue),
@@ -148,25 +149,33 @@ fn main() {
                                 .required(true)
                         ),
                     Command::new("aut-num")
-                        .about("Remove a list of aut-nums based on the JSON file produced by parsing mrt data")
+                        .about("Remove unused aut-nums using a list of active ones")
                         .args([
-                            Arg::new("json_file")
-                                .long("json_file")
+                            Arg::new("list_file")
+                                .long("list_file")
                                 .short('f')
-                                .help("Path to JSON file produced by parsing mrt data")
-                                .required(true),
+                                .help("Path to a file containing a comma-separated list of aut-nums to keep"),
+                            Arg::new("list")
+                                .long("list")
+                                .short('l')
+                                .help("Comma-separated list of aut-nums to keep"),
                             Arg::new("enable_subgraph_check")
-                                .help("enable check for invalid sub-graphs")
+                                .help("Enable check for invalid sub-graphs")
                                 .long("enable_subgraph_check")
                                 .short('s')
                                 .action(ArgAction::SetTrue),
                             Arg::new("max_inactive_secs")
-                                .help("Minimum age in seconds for an ASN to be considered inactive")
+                                .help("Minimum age in seconds for an ASN to be considered inactive. Checked via git log.")
                                 .default_value("0")
                                 .short('i')
                                 .long("max-inactive-secs")
                                 .value_parser(clap::value_parser!(u64)),
                         ])
+                        .group(
+                            ArgGroup::new("input_group")
+                                .args(["list_file", "list"])
+                                .required(true)
+                        ),
                 ]),
             Command::new("mrt_activity")
                 .about("Output active ASNs from MRT RIB dumps along with their last seen time")
@@ -180,6 +189,11 @@ fn main() {
                         .short('i')
                         .long("max-inactive-secs")
                         .value_parser(clap::value_parser!(u64)),
+                    Arg::new("list_output")
+                        .help("Output plain comma-separated list")
+                        .long("list")
+                        .short('l')
+                        .action(ArgAction::SetTrue),
                 ])
         ],
     ).get_matches();
@@ -288,22 +302,15 @@ fn main() {
         Some(("remove", c)) => {
             let result: BoxResult<String> = match c.subcommand() {
                 Some(("mnt", c)) => {
-                    let input: EitherOr<String, String> = if c.contains_id("list_file") {
-                        let mnt_file = c.get_one::<String>("list_file").unwrap();
-                        EitherOr::A(mnt_file.clone())
-                    } else {
-                        let mnt_list = c.get_one::<String>("list").unwrap();
-                        EitherOr::B(mnt_list.clone())
-                    };
-
+                    let input = get_input_list(c);
                     let enable_subgraph_check = *c.get_one::<bool>("enable_subgraph_check").unwrap();
-                    modules::registry_remove::output(base_path, Some(input), None, None, enable_subgraph_check)
+                    modules::registry_remove::output(base_path, input, RemovalCategory::Mnt, None, enable_subgraph_check)
                 }
                 Some(("aut-num", c)) => {
+                    let input = get_input_list(c);
                     let enable_subgraph_check = *c.get_one::<bool>("enable_subgraph_check").unwrap();
-                    let asn_file = c.get_one::<String>("json_file").unwrap().clone();
                     let max_inactive_secs = c.get_one::<u64>("max_inactive_secs").copied();
-                    modules::registry_remove::output(base_path, None, Some(asn_file), max_inactive_secs, enable_subgraph_check)
+                    modules::registry_remove::output(base_path, input, RemovalCategory::Asn, max_inactive_secs, enable_subgraph_check)
                 }
                 _ => unreachable!()
             };
@@ -312,10 +319,21 @@ fn main() {
         Some(("mrt_activity", c)) => {
             let max_inactive_secs = c.get_one::<u64>("max_inactive_secs").unwrap();
             let mrt_root = c.get_one::<String>("mrt_root").unwrap();
-            let result = modules::mrt_activity::output(mrt_root.to_owned(), max_inactive_secs.to_owned());
+            let list_output = *c.get_one::<bool>("list_output").unwrap();
+            let result = modules::mrt_activity::output(mrt_root.to_owned(), max_inactive_secs.to_owned(), list_output);
             output_result(result)
         }
         _ => unreachable!()
+    }
+}
+
+fn get_input_list(c: &ArgMatches) -> EitherOr<String, String> {
+    if c.contains_id("list_file") {
+        let list_file = c.get_one::<String>("list_file").unwrap();
+        EitherOr::A(list_file.clone())
+    } else {
+        let list = c.get_one::<String>("list").unwrap();
+        EitherOr::B(list.clone())
     }
 }
 

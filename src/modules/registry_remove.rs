@@ -1,12 +1,11 @@
-use std::cell::Cell;
-use std::collections::HashMap;
-use std::process::Command;
-use std::rc::Rc;
-use serde::Serialize;
 use crate::modules::mrt_activity::get_cutoff_time;
-use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkedRegistryObject, ExtraDataTrait, link_recurse, WEAKLY_REFERENCING};
+use crate::modules::registry_graph::{create_registry_graph, link_recurse, parse_registry_schema, ExtraDataTrait, LinkedRegistryObject, WEAKLY_REFERENCING};
 use crate::modules::util;
 use crate::modules::util::{BoxResult, EitherOr};
+use serde::Serialize;
+use std::cell::Cell;
+use std::process::Command;
+use std::rc::Rc;
 
 
 #[derive(Debug, Serialize, Default)]
@@ -16,81 +15,92 @@ struct MetaData {
 }
 impl ExtraDataTrait for MetaData {}
 
-pub fn output(registry_root: String, mnt_input: Option<EitherOr<String, String>>,
-              asn_input: Option<String>,
+pub enum RemovalCategory {
+    Mnt,
+    Asn
+}
+
+impl RemovalCategory {
+    fn as_str(&self) -> &str {
+        match self {
+            RemovalCategory::Mnt => "mntner",
+            RemovalCategory::Asn => "aut-num"
+        }
+    }
+}
+
+pub fn output(registry_root: String, data_input: EitherOr<String, String>,
+              removal_category: RemovalCategory,
               asn_max_inactive_secs: Option<u64>,
               with_subgraph_check: bool) -> BoxResult<String> {
     if !with_subgraph_check {
         eprintln!("Warning: Subgraph check has been disabled")
     }
 
+    let raw_list = match data_input {
+        EitherOr::A(file) => {
+            util::read_lines(file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n")
+        }
+        EitherOr::B(list) => {
+            list
+        }
+    };
+
     let mut output = String::new();
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
     let graph = create_registry_graph::<MetaData>(registry_root.to_owned(), &registry_schema)?;
 
     let mut removal_list: Vec<String>;
-    let removal_category: String;
+   // let removal_category: String;
     let affected_graph;
-
-    if let Some(mnt_input) = mnt_input {
-        removal_category = "mntner".to_string();
-        let mnt_raw_list = match mnt_input {
-            EitherOr::A(file) => {
-                util::read_lines(file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n")
-            }
-            EitherOr::B(list) => {
-                list
-            }
-        };
-        removal_list = mnt_raw_list.split(",").map(String::from).collect();
-        affected_graph = graph.get("mntner").ok_or("mntner graph not found")?;
-    } else if let Some(asn_input) = asn_input {
-        removal_category = "aut-num".to_string();
-        affected_graph = graph.get("aut-num").ok_or("aut-num graph not found")?;
-        let json_str = util::read_lines(asn_input)?.map_while(Result::ok).collect::<Vec<String>>().join("\n");
-        let mut active_asn: HashMap<u32, u64> = serde_json::from_str(json_str.as_str())?;
-
-        let asn_cutoff_time = asn_max_inactive_secs.and_then(|x| {
-            if x == 0 {
-                return None;
-            }
-            Some(get_cutoff_time(x))
-        });
-        if let Some(cutoff_time) = asn_cutoff_time {
-            active_asn.retain(|_, t| *t >= cutoff_time);
+    match removal_category {
+        RemovalCategory::Mnt => {
+            removal_list = raw_list.split(",").map(String::from).collect();
+            affected_graph = graph.get("mntner").ok_or("mntner graph not found")?;
         }
-
-        eprintln!("Active ASN count: {}", active_asn.len());
-        let active_asn = active_asn.keys().map(|x| format!("AS{}", x)).collect::<Vec<String>>();
-        removal_list = affected_graph.iter()
-            .map(|x| x.object.filename.clone())
-            .filter(|x| !active_asn.contains(x))
-            .collect();
-        if let Some(cutoff_time) = asn_cutoff_time {
-            eprintln!("Checking git activity log");
-            let mut had_errors = false;
-            removal_list.retain(|s| {
-                let asn_path = &format!("data/aut-num/{}", s);
-                let last_activity = get_last_git_activity(&registry_root, asn_path);
-                if last_activity.is_err() {
-                    had_errors = true;
-                    eprintln!("Error getting last git activity for: {} - {}", asn_path, last_activity.unwrap_err());
-                    return false;
+        RemovalCategory::Asn => {
+            let ok = raw_list.chars().all(|c|c == ',' || char::is_numeric(c) || char::is_whitespace(c));
+            if !ok {
+                return Err("ASN list contains invalid characters".into());
+            }
+            
+            let active_asn: Vec<String> = raw_list.split(",").map(String::from).collect();
+            affected_graph = graph.get("aut-num").ok_or("aut-num graph not found")?;
+            eprintln!("Active ASN count: {}", active_asn.len());
+            let active_asn = active_asn.into_iter().map(|x| format!("AS{}", x.trim())).collect::<Vec<String>>();
+            removal_list = affected_graph.iter()
+                .map(|x| x.object.filename.clone())
+                .filter(|x| !active_asn.contains(x))
+                .collect();
+            let asn_cutoff_time = asn_max_inactive_secs.and_then(|x| {
+                if x == 0 {
+                    return None;
                 }
-                if last_activity.unwrap() < cutoff_time {
-                    return true;
-                }
-                false
+                Some(get_cutoff_time(x))
             });
-            if had_errors {
-                return Err("errors getting git activity".into());
+            if let Some(cutoff_time) = asn_cutoff_time {
+                eprintln!("Checking git activity log (this may take a long time)");
+                let mut had_errors = false;
+                removal_list.retain(|s| {
+                    let asn_path = &format!("data/aut-num/{}", s);
+                    let last_activity = get_last_git_activity(&registry_root, asn_path);
+                    if last_activity.is_err() {
+                        had_errors = true;
+                        eprintln!("Error getting last git activity for: {} - {}", asn_path, last_activity.unwrap_err());
+                        return false;
+                    }
+                    if last_activity.unwrap() < cutoff_time {
+                        return true;
+                    }
+                    false
+                });
+                if had_errors {
+                    return Err("errors getting git activity".into());
+                }
             }
+            eprintln!("Final removal list: {}", removal_list.join(","));
         }
-        eprintln!("Final removal list: {}", removal_list.join(","));
-    } else {
-        unreachable!("invalid function usage")
     }
-
 
     let only_one_removal_item = matches!(removal_list.len(), 1);
     eprintln!("Trying to remove {} objects", removal_list.len());
@@ -133,7 +143,7 @@ pub fn output(registry_root: String, mnt_input: Option<EitherOr<String, String>>
 
             // If an *unmarked* mntner/aut-num vertex is encountered, unmark self and flag for manual review
             let empty_vec : Vec<String> = Vec::with_capacity(0);
-            if !obj.extra.marked.get() && obj.category == removal_category {
+            if !obj.extra.marked.get() && obj.category == removal_category.as_str() {
                 t.extra.marked.set(false);
                 let t_mnt = t.object.key_value.get("mnt-by").unwrap_or(&empty_vec);
                 if !t_mnt.contains(&String::from("DN42-MNT")) {

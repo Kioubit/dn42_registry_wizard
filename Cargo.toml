@@ -12,7 +12,7 @@ serde_json = "1.0.128"
 # bgpkit-parser = "0.10.10"
 bgpkit-parser = { git = "https://github.com/bgpkit/bgpkit-parser.git", rev = "74eb14514089edcbf3d1ba7b8d7707a3ea664300", default-features = false, features = ["parser"] }
 rayon = "1.10.0"
-clap = "4.5.19"
+clap = "4.5.20"
 dot = "0.1.4"
 
 [profile.release]
