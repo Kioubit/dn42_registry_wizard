@@ -6,7 +6,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::rc::{Rc, Weak};
-use crate::modules::registry_graphviz::create_graphviz;
 
 #[derive(Debug)]
 pub(crate) struct Schema {
@@ -50,7 +49,7 @@ impl<'a, M: ExtraDataTrait> Iterator for LinkIterator<'a, M> {
     fn next(&mut self) -> Option<Self::Item> {
         let lo = if self.backlinks {
             self.object.back_links.borrow()
-        } else { 
+        } else {
             self.object.forward_links.borrow()
         };
         let l = lo.get(self.index);
@@ -95,98 +94,6 @@ where
         })
         .collect::<Vec<_>>();
     link_array.serialize(s)
-}
-
-pub fn output_list(registry_root: String, obj_type: Option<String>, object_name: Option<String>, graphviz: bool) -> BoxResult<String> {
-    let registry_schema = parse_registry_schema(registry_root.to_owned())?;
-    let graph = create_registry_graph::<()>(registry_root.to_owned(), &registry_schema)?;
-    match obj_type {
-        None => {
-            if graphviz {
-                let full = graph.iter().flat_map(|vec| vec.1).cloned().collect::<Vec<_>>();
-                Ok(create_graphviz(full, None)?)
-            } else {
-                Ok(serde_json::to_string(&graph)?)
-            }
-        }
-        Some(s) => {
-            match object_name {
-                None => {
-                    let v = graph.get(&s).ok_or("object type not found")?;
-                    if graphviz {
-                        Ok(create_graphviz(v.to_vec(), None)?)
-                    } else {
-                        Ok(serde_json::to_string(v)?)
-                    }
-                }
-                Some(n) => {
-                    if graphviz {
-                        return Err("Cannot use the graphviz option in combination with object_name".into());
-                    }
-                    let r = &graph.get(&s)
-                        .ok_or("object type not found")?
-                        .iter().find(|x| x.object.filename == n)
-                        .ok_or("object by name not found");
-                    Ok(serde_json::to_string(r)?)
-                }
-            }
-        }
-    }
-}
-
-pub fn output_related(registry_root: String, obj_type: String,
-                      obj_name: String, enforce_mnt_by: Option<String>, only_related_to_mnt: Option<String>,
-                      graphviz: bool
-) -> BoxResult<String> {
-    let schema = parse_registry_schema(registry_root.to_owned())?;
-    let graph = create_registry_graph::<()>(registry_root, &schema)?;
-    let t_obj = graph.get(&obj_type).ok_or("specified object type not found")?
-        .iter().find(|x| x.object.filename == obj_name)
-        .ok_or("specified obj_name not found")?;
-
-    let mut visited: Vec<Rc<LinkedRegistryObject<()>>> = Vec::new();
-    let mut to_visit: Vec<Rc<LinkedRegistryObject<()>>> = Vec::new();
-    visited.push(t_obj.clone());
-    to_visit.push(t_obj.clone());
-    while let Some(obj) = to_visit.pop() {
-        if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
-            continue;
-        }
-        if let Some(ref target) = only_related_to_mnt {
-            if let Some(m) = obj.object.key_value.get("mnt-by") {
-                if m.iter().any(|x| x != target) {
-                    continue;
-                }
-            }
-        }
-        link_recurse(&obj, &mut visited, &mut to_visit);
-    }
-    if let Some(ref target) = enforce_mnt_by {
-        visited.retain(|v| {
-            if let Some(m) = v.object.key_value.get("mnt-by") {
-                if m.iter().any(|x| x != target) {
-                    return false;
-                }
-            }
-            true
-        });
-    }
-    
-    if graphviz {
-        let mnt = if only_related_to_mnt.is_some() {
-            only_related_to_mnt
-        } else if enforce_mnt_by.is_some() { 
-            enforce_mnt_by
-        } else { 
-            None
-        };
-        return create_graphviz(visited.clone(), mnt);
-    }
-    
-    let result: Vec<_> = visited.iter()
-        .map(|x| format!("{}/{}", x.category, x.object.filename))
-        .collect();
-    Ok(serde_json::to_string(&result)?)
 }
 
 pub(crate) type RegistryGraph<M> = HashMap<String, Vec<Rc<LinkedRegistryObject<M>>>>;
@@ -352,9 +259,10 @@ pub(crate) fn parse_registry_schema(registry_root: String) -> BoxResult<Vec<Sche
 }
 
 
-pub(crate) fn link_recurse<M: ExtraDataTrait>(obj: &Rc<LinkedRegistryObject<M>>,
-                                              visited: &mut Vec<Rc<LinkedRegistryObject<M>>>,
-                                              to_visit: &mut Vec<Rc<LinkedRegistryObject<M>>>) {
+pub(crate) fn link_visit<M: ExtraDataTrait>(
+    obj: &Rc<LinkedRegistryObject<M>>, visited: &mut Vec<Rc<LinkedRegistryObject<M>>>,
+    to_visit: &mut Vec<Rc<LinkedRegistryObject<M>>>,
+) {
     for link in obj.get_forward_links().chain(obj.get_back_links()) {
         let mut found = false;
         for visited in &mut *visited {

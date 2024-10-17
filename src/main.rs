@@ -114,6 +114,22 @@ fn main() {
                         .group(ArgGroup::new("input_group")
                             .args(["enforce_mnt_by", "related_mnt_by"])
                             .required(false)),
+                    Command::new("path")
+                        .about("Output the shorted path found between two registry objects (if one exists)")
+                        .args([
+                            Arg::new("src_object_type")
+                                .required(true)
+                                .help("Source object type (i.e. aut-num)"),
+                            Arg::new("src_object_name")
+                                .required(true)
+                                .help("Source object name (i.e. AS4242420000)"),
+                            Arg::new("tgt_object_type")
+                                .required(true)
+                                .help("Target object type (i.e. aut-num)"),
+                            Arg::new("tgt_object_name")
+                                .required(true)
+                                .help("Target object name (i.e. AS4242420001)"),
+                        ])
                 ]),
             Command::new("hierarchical_prefixes")
                 .about("Hierarchical prefix tree output (JSON format)")
@@ -286,7 +302,7 @@ fn main() {
                         obj_name = Some(c.get_one::<String>("object_name").unwrap().clone());
                     }
 
-                    let result = modules::registry_graph::output_list(base_path, obj_type, obj_name, graphviz);
+                    let result = modules::registry_graph_tools::output_list(base_path, obj_type, obj_name, graphviz);
                     output_result(result)
                 }
                 Some(("related", c)) => {
@@ -303,7 +319,15 @@ fn main() {
                         None
                     };
                     let graphviz = *c.get_one::<bool>("graphviz").unwrap();
-                    let result = modules::registry_graph::output_related(base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, graphviz);
+                    let result = modules::registry_graph_tools::output_related(base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, graphviz);
+                    output_result(result)
+                }
+                Some(("path", c)) => {
+                    let src_type = c.get_one::<String>("src_object_type").unwrap().clone();
+                    let tgt_type = c.get_one::<String>("tgt_object_type").unwrap().clone();
+                    let src_name = c.get_one::<String>("src_object_name").unwrap().clone();
+                    let tgt_name = c.get_one::<String>("tgt_object_name").unwrap().clone();
+                    let result = modules::registry_graph_tools::output_path(base_path, src_type, tgt_type, src_name, tgt_name);
                     output_result(result)
                 }
                 _ => unreachable!()

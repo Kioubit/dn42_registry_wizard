@@ -1,4 +1,4 @@
-use crate::modules::registry_graph::{create_registry_graph, link_recurse, parse_registry_schema, ExtraDataTrait, LinkedRegistryObject, WEAKLY_REFERENCING};
+use crate::modules::registry_graph::{create_registry_graph, link_visit, parse_registry_schema, ExtraDataTrait, LinkedRegistryObject, WEAKLY_REFERENCING};
 use crate::modules::util::{get_item_list, BoxResult, EitherOr};
 use serde::Serialize;
 use std::cell::Cell;
@@ -113,7 +113,7 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
                 break;
             }
 
-            link_recurse(&obj, &mut visited, &mut to_visit);
+            link_visit(&obj, &mut visited, &mut to_visit);
         }
     }
 
@@ -144,7 +144,7 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
             obj.extra.deleted.set(true);
             output.push_str(&format!("rm 'data/{}/{}'\n", obj.category, obj.object.filename));
 
-            link_recurse(&obj, &mut visited, &mut to_visit);
+            link_visit(&obj, &mut visited, &mut to_visit);
         }
     }
 
@@ -270,7 +270,7 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
                 }
             }
 
-            link_recurse(&obj, &mut visited, &mut to_visit);
+            link_visit(&obj, &mut visited, &mut to_visit);
         }
         if !graph_has_asn {
             eprintln!("Warning: Deleting invalid sub-graph for item '{}': {:?}", item.object.filename,
