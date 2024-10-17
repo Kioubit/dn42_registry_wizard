@@ -52,12 +52,13 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
                 return Err("ASN list contains invalid characters".into());
             }
             affected_graph = graph.get("aut-num").ok_or("aut-num graph not found")?;
-            removal_list = raw_list.split(",").map(String::from).collect();
+            removal_list = raw_list.split(",").map(String::from)
+                .map(|x| format!("AS{}", x.trim())).collect();
         }
     }
 
     let only_one_removal_item = matches!(removal_list.len(), 1);
-    eprintln!("Provided list contains {} objects", removal_list.len());
+    eprintln!("Provided list contains {} object(s)", removal_list.len());
 
     // Assuming the registry objects form an undirected graph which is a superset of many disconnected sub-graphs
     // Mark all mntner/aut-num vertices to delete
@@ -100,7 +101,7 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
             if !obj.extra.marked.get() && obj.category == removal_category.as_str() {
                 t.extra.marked.set(false);
                 let t_mnt = t.object.key_value.get("mnt-by").unwrap_or(&empty_vec);
-                if !t_mnt.contains(&String::from("DN42-MNT")) {
+                if !t_mnt.contains(&String::from("DN42-MNT")) || only_one_removal_item {
                     eprintln!("Manual review: {} - {:?} (First conflict with active object: {} - {:?})",
                               t.object.filename, t_mnt,
                               obj.object.filename, obj.object.key_value.get("mnt-by").unwrap_or(&empty_vec)
