@@ -1,6 +1,6 @@
 [package]
 name = "registry_wizard"
-version = "0.3.8"
+version = "0.3.9"
 edition = "2021"
 
 [dependencies]
@@ -17,7 +17,7 @@ dot = "0.1.4"
 
 [profile.release]
 opt-level = 3       # Enable all optimizations
-lto = true          # Enable link-time optimizationr
+lto = true          # Enable link-time optimization
 codegen-units = 1   # Reduce number of codegen units to increase optimizations
 panic = 'abort'     # Abort on panic
 strip = true        # Strip symbols from binary

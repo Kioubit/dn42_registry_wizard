@@ -8,7 +8,7 @@ pub fn output(registry_root: String, target_folder: String,
 ) -> BoxResult<String> {
     let sub_path = "data/".to_owned() + &*target_folder;
     let mut objects = HashMap::new();
-    let mut registry = registry_objects_to_iter(registry_root, sub_path.as_str())?;
+    let mut registry = registry_objects_to_iter(&registry_root, sub_path.as_str())?;
     if let Some(exclusive_fields) = exclusive_fields {
         registry.add_exclusive_fields(exclusive_fields);
     }

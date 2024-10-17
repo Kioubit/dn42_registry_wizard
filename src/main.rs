@@ -149,27 +149,21 @@ fn main() {
                                 .required(true)
                         ),
                     Command::new("aut-num")
-                        .about("Remove unused aut-nums using a list of active ones")
+                        .about("Remove a list of unused aut-nums")
                         .args([
                             Arg::new("list_file")
                                 .long("list_file")
                                 .short('f')
-                                .help("Path to a file containing a comma-separated list of aut-nums to keep"),
+                                .help("Path to a file containing a comma-separated list of aut-nums to remove"),
                             Arg::new("list")
                                 .long("list")
                                 .short('l')
-                                .help("Comma-separated list of aut-nums to keep"),
+                                .help("Output a comma-separated list of aut-nums to remove"),
                             Arg::new("enable_subgraph_check")
                                 .help("Enable check for invalid sub-graphs")
                                 .long("enable_subgraph_check")
                                 .short('s')
                                 .action(ArgAction::SetTrue),
-                            Arg::new("max_inactive_secs")
-                                .help("Minimum age in seconds for an ASN to be considered inactive. Checked via git log.")
-                                .default_value("0")
-                                .short('i')
-                                .long("max-inactive-secs")
-                                .value_parser(clap::value_parser!(u64)),
                         ])
                         .group(
                             ArgGroup::new("input_group")
@@ -179,21 +173,48 @@ fn main() {
                 ]),
             Command::new("mrt_activity")
                 .about("Output active ASNs from MRT RIB dumps along with their last seen time")
-                .args([
-                    Arg::new("mrt_root")
-                        .help("Path to the MRT data directory")
-                        .required(true),
-                    Arg::new("max_inactive_secs")
-                        .help("Minimum age in seconds for an ASN to be considered inactive")
-                        .default_value("0")
-                        .short('i')
-                        .long("max-inactive-secs")
-                        .value_parser(clap::value_parser!(u64)),
-                    Arg::new("list_output")
-                        .help("Output plain comma-separated list")
-                        .long("list")
-                        .short('l')
-                        .action(ArgAction::SetTrue),
+                .subcommand_required(true)
+                .subcommands([
+                    Command::new("parse")
+                        .about("Parse MRT RIB dumps")
+                        .args([
+                            Arg::new("mrt_root")
+                                .help("Path to the MRT data directory")
+                                .required(true),
+                            Arg::new("cutoff_time")
+                                .help("Earliest unix time at which an ASN is considered to be active")
+                                .default_value("0")
+                                .short('c')
+                                .long("cutoff-time")
+                                .value_parser(clap::value_parser!(u64)),
+                            Arg::new("list_output")
+                                .help("Output plain comma-separated list")
+                                .long("list")
+                                .short('l')
+                                .action(ArgAction::SetTrue),
+                        ]),
+                    Command::new("active_asn_to_inactive")
+                        .about("Convert a list of active ASNs to a list of inactive ASNs by looking through the registry")
+                        .args([
+                            Arg::new("list_file")
+                                .long("list_file")
+                                .short('f')
+                                .help("Path to a file containing a comma-separated list of aut-nums to keep"),
+                            Arg::new("list")
+                                .long("list")
+                                .short('l')
+                                .help("Comma-separated list of aut-nums to keep"),
+                            Arg::new("cutoff_time")
+                                .help("Earliest unix time at which an ASN is considered to be active. (Checked using git log)")
+                                .short('c')
+                                .long("cutoff-time")
+                                .value_parser(clap::value_parser!(u64)),
+                        ])
+                        .group(
+                            ArgGroup::new("input_group")
+                                .args(["list_file", "list"])
+                                .required(true)
+                        ),
                 ])
         ],
     ).get_matches();
@@ -300,27 +321,36 @@ fn main() {
             output_result(result)
         }
         Some(("remove", c)) => {
-            let result: BoxResult<String> = match c.subcommand() {
+            let result = match c.subcommand() {
                 Some(("mnt", c)) => {
                     let input = get_input_list(c);
                     let enable_subgraph_check = *c.get_one::<bool>("enable_subgraph_check").unwrap();
-                    modules::registry_remove::output(base_path, input, RemovalCategory::Mnt, None, enable_subgraph_check)
+                    modules::registry_remove::output(base_path, input, RemovalCategory::Mnt, enable_subgraph_check)
                 }
                 Some(("aut-num", c)) => {
                     let input = get_input_list(c);
                     let enable_subgraph_check = *c.get_one::<bool>("enable_subgraph_check").unwrap();
-                    let max_inactive_secs = c.get_one::<u64>("max_inactive_secs").copied();
-                    modules::registry_remove::output(base_path, input, RemovalCategory::Asn, max_inactive_secs, enable_subgraph_check)
+                    modules::registry_remove::output(base_path, input, RemovalCategory::Asn, enable_subgraph_check)
                 }
                 _ => unreachable!()
             };
             output_result(result)
         }
         Some(("mrt_activity", c)) => {
-            let max_inactive_secs = c.get_one::<u64>("max_inactive_secs").unwrap();
-            let mrt_root = c.get_one::<String>("mrt_root").unwrap();
-            let list_output = *c.get_one::<bool>("list_output").unwrap();
-            let result = modules::mrt_activity::output(mrt_root.to_owned(), max_inactive_secs.to_owned(), list_output);
+            let result = match c.subcommand() {
+                Some(("parse", c)) => {
+                    let cutoff_time = *c.get_one::<u64>("cutoff_time").unwrap();
+                    let mrt_root = c.get_one::<String>("mrt_root").unwrap().clone();
+                    let list_output = *c.get_one::<bool>("list_output").unwrap();
+                    modules::mrt_activity::output(mrt_root, cutoff_time, list_output)
+                }
+                Some(("active_asn_to_inactive", c)) => {
+                    let input = get_input_list(c);
+                    let cutoff_time = c.get_one::<u64>("cutoff_time").cloned();
+                    modules::inactive_asns::output(base_path, input, cutoff_time)
+                }
+                _ => unreachable!()
+            };
             output_result(result)
         }
         _ => unreachable!()

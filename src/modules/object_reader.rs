@@ -18,9 +18,14 @@ pub struct RegistryObjectIterator {
     filename_filter: Vec<String>,
     exclusive_fields: RefCell<Option<Vec<String>>>,
     filtered_fields: RefCell<Option<Vec<String>>>,
+    enumerate_only: bool,
 }
 
 impl RegistryObjectIterator {
+    pub fn set_enumerate_only(&mut self, state: bool) -> &Self {
+        self.enumerate_only = state;
+        self
+    }
     pub fn add_filename_filter(&mut self, filter: &str) -> &Self {
         self.filename_filter.push(filter.to_owned());
         self
@@ -48,6 +53,14 @@ impl Iterator for RegistryObjectIterator {
             }
             break;
         }
+
+        if self.enumerate_only {
+            return Some(Ok(RegistryObject{
+                key_value: Default::default(),
+                filename: path.0,
+            }));
+        }
+
         let obj = read_registry_object_kv_filtered(path.1, &self.exclusive_fields.borrow(), &self.filtered_fields.borrow());
         match obj {
             Ok(obj) => {
@@ -61,18 +74,19 @@ impl Iterator for RegistryObjectIterator {
     }
 }
 
-pub fn registry_objects_to_iter(registry_root: String, sub_path: &str) -> BoxResult<RegistryObjectIterator> {
+pub fn registry_objects_to_iter(registry_root: &str, sub_path: &str) -> BoxResult<RegistryObjectIterator> {
     let paths = get_object_paths(registry_root, sub_path)?;
     Ok(RegistryObjectIterator {
         paths,
         filename_filter: vec![],
         exclusive_fields: RefCell::new(None),
         filtered_fields: RefCell::new(None),
+        enumerate_only: false,
     })
 }
 
-fn get_object_paths(registry_root: String, sub_path: &str) -> BoxResult<Vec<(String, PathBuf)>> {
-    let target_path = registry_root + sub_path;
+fn get_object_paths(registry_root: &str, sub_path: &str) -> BoxResult<Vec<(String, PathBuf)>> {
+    let target_path = registry_root.to_string() + sub_path;
     let dir = read_dir(target_path)?;
     let mut paths = Vec::<(String, PathBuf)>::new();
     for file_result in dir {
@@ -87,7 +101,7 @@ fn get_object_paths(registry_root: String, sub_path: &str) -> BoxResult<Vec<(Str
 }
 
 pub fn read_registry_objects(registry_root: String, sub_path: &str, enumerate_only: bool) -> BoxResult<Vec<RegistryObject>> {
-    let paths = get_object_paths(registry_root, sub_path)?;
+    let paths = get_object_paths(&registry_root, sub_path)?;
 
     let mut objects = Vec::<RegistryObject>::new();
 

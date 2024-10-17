@@ -1,10 +1,7 @@
-use crate::modules::mrt_activity::get_cutoff_time;
 use crate::modules::registry_graph::{create_registry_graph, link_recurse, parse_registry_schema, ExtraDataTrait, LinkedRegistryObject, WEAKLY_REFERENCING};
-use crate::modules::util;
-use crate::modules::util::{BoxResult, EitherOr};
+use crate::modules::util::{get_item_list, BoxResult, EitherOr};
 use serde::Serialize;
 use std::cell::Cell;
-use std::process::Command;
 use std::rc::Rc;
 
 
@@ -31,27 +28,18 @@ impl RemovalCategory {
 
 pub fn output(registry_root: String, data_input: EitherOr<String, String>,
               removal_category: RemovalCategory,
-              asn_max_inactive_secs: Option<u64>,
               with_subgraph_check: bool) -> BoxResult<String> {
     if !with_subgraph_check {
         eprintln!("Warning: Subgraph check has been disabled")
     }
 
-    let raw_list = match data_input {
-        EitherOr::A(file) => {
-            util::read_lines(file)?.map_while(Result::ok).collect::<Vec<String>>().join("\n")
-        }
-        EitherOr::B(list) => {
-            list
-        }
-    };
+    let raw_list = get_item_list(data_input)?;
 
     let mut output = String::new();
     let registry_schema = parse_registry_schema(registry_root.to_owned())?;
     let graph = create_registry_graph::<MetaData>(registry_root.to_owned(), &registry_schema)?;
 
-    let mut removal_list: Vec<String>;
-   // let removal_category: String;
+    let removal_list: Vec<String>;
     let affected_graph;
     match removal_category {
         RemovalCategory::Mnt => {
@@ -63,47 +51,13 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
             if !ok {
                 return Err("ASN list contains invalid characters".into());
             }
-            
-            let active_asn: Vec<String> = raw_list.split(",").map(String::from).collect();
             affected_graph = graph.get("aut-num").ok_or("aut-num graph not found")?;
-            eprintln!("Active ASN count: {}", active_asn.len());
-            let active_asn = active_asn.into_iter().map(|x| format!("AS{}", x.trim())).collect::<Vec<String>>();
-            removal_list = affected_graph.iter()
-                .map(|x| x.object.filename.clone())
-                .filter(|x| !active_asn.contains(x))
-                .collect();
-            let asn_cutoff_time = asn_max_inactive_secs.and_then(|x| {
-                if x == 0 {
-                    return None;
-                }
-                Some(get_cutoff_time(x))
-            });
-            if let Some(cutoff_time) = asn_cutoff_time {
-                eprintln!("Checking git activity log (this may take a long time)");
-                let mut had_errors = false;
-                removal_list.retain(|s| {
-                    let asn_path = &format!("data/aut-num/{}", s);
-                    let last_activity = get_last_git_activity(&registry_root, asn_path);
-                    if last_activity.is_err() {
-                        had_errors = true;
-                        eprintln!("Error getting last git activity for: {} - {}", asn_path, last_activity.unwrap_err());
-                        return false;
-                    }
-                    if last_activity.unwrap() < cutoff_time {
-                        return true;
-                    }
-                    false
-                });
-                if had_errors {
-                    return Err("errors getting git activity".into());
-                }
-            }
-            eprintln!("Final removal list: {}", removal_list.join(","));
+            removal_list = raw_list.split(",").map(String::from).collect();
         }
     }
 
     let only_one_removal_item = matches!(removal_list.len(), 1);
-    eprintln!("Trying to remove {} objects", removal_list.len());
+    eprintln!("Provided list contains {} objects", removal_list.len());
 
     // Assuming the registry objects form an undirected graph which is a superset of many disconnected sub-graphs
     // Mark all mntner/aut-num vertices to delete
@@ -329,25 +283,4 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
     }
 
     Ok(output)
-}
-
-
-fn get_last_git_activity(registry_root: &str, path: &str) -> BoxResult<u64> {
-    let cmd_output = Command::new("git")
-        .arg("log")
-        .arg("-1")
-        .arg("--format=%ct")
-        .arg(path)
-        .current_dir(registry_root)
-        .output()?;
-    if !cmd_output.status.success() {
-        eprintln!("{:?}", String::from_utf8_lossy(&cmd_output.stderr));
-        return Err("git log failed".into());
-    }
-    let output = String::from_utf8(cmd_output.stdout)?;
-    let output_clean = match output.strip_suffix('\n') {
-        Some(s) => s,
-        None => output.as_str()
-    };
-    Ok(output_clean.parse::<u64>()?)
 }

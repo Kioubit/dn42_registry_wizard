@@ -5,8 +5,7 @@ use bgpkit_parser::{BgpkitParser, MrtRecord};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::{thread, time};
+use std::thread;
 
 pub fn output(mrt_root: String, max_inactive_secs: u64, output_as_list: bool) -> BoxResult<String> {
     let active_asn = get_active_asn_list(mrt_root, max_inactive_secs)?;
@@ -18,22 +17,8 @@ pub fn output(mrt_root: String, max_inactive_secs: u64, output_as_list: bool) ->
     }
 }
 
-pub fn get_cutoff_time(max_inactive_secs: u64) -> u64 {
-    if max_inactive_secs == 0 {
-        eprintln!("Cutoff time: not set");
-        0
-    } else {
-        let mut time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        time -= time::Duration::new(max_inactive_secs, 0);
-        let cutoff_time = time.as_secs();
-        eprintln!("Cutoff time: {}", cutoff_time);
-        cutoff_time
-    }
-}
 
-fn get_active_asn_list(mrt_root: String, max_inactive_secs: u64) -> BoxResult<HashMap<u32, u64>> {
-    let cutoff_time = get_cutoff_time(max_inactive_secs);
-
+fn get_active_asn_list(mrt_root: String, cutoff_time: u64) -> BoxResult<HashMap<u32, u64>> {
     let paths = util::walk_dir(mrt_root, 10)?;
 
     let pool = rayon::ThreadPoolBuilder::new()
@@ -102,7 +87,7 @@ fn analyze_mrt_file(path: &str, x: &mut HashMap<u32, u64>, cutoff_time: u32) -> 
     for record in parser.into_record_iter() {
         had_record = true;
         let timestamp = record.common_header.timestamp;
-        if timestamp < cutoff_time && cutoff_time != 0 {
+        if timestamp < cutoff_time {
             // Each RIB dump file only contains records from the same timestamp
             break;
         }
