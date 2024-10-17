@@ -9,9 +9,9 @@ Commands:
   roa                    ROA file generation (various formats)
   dns                    DNS zone file and trust anchor generation (for use with PowerDNS)
   object_metadata        Object metadata output (JSON format)
-  graph                  Registry object output with forward and backlinks (JSON format)
+  graph                  Registry object output with forward and backlinks (JSON / graphviz dot format)
   hierarchical_prefixes  Hierarchical prefix tree output (JSON format)
-  remove                 Remove a list of registry objects along with all their dependencies
+  remove                 Safely remove a list of registry objects along with all their dependencies
   mrt_activity           Output active ASNs from MRT RIB dumps along with their last seen time
   help                   Print this message or the help of the given subcommand(s)
 

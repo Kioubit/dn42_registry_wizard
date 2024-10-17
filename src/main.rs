@@ -72,7 +72,7 @@ fn main() {
                         .help("Don't output objects without keys (useful if filtering)"),
                 ]),
             Command::new("graph")
-                .about("Registry object output with forward and backlinks (JSON format)")
+                .about("Registry object output with forward and backlinks (JSON / graphviz dot format)")
                 .subcommand_required(true)
                 .subcommands([
                     Command::new("list")
@@ -123,7 +123,7 @@ fn main() {
                     Command::new("v6").about("IPv6"),
                 ]),
             Command::new("remove")
-                .about("Remove a list of registry objects along with all their dependencies")
+                .about("Safely remove a list of registry objects along with all their dependencies")
                 .subcommand_required(true)
                 .subcommands([
                     Command::new("mnt")
@@ -149,7 +149,7 @@ fn main() {
                                 .required(true)
                         ),
                     Command::new("aut-num")
-                        .about("Remove a list of unused aut-nums")
+                        .about("Remove a list of unused aut-nums along with dependencies")
                         .args([
                             Arg::new("list_file")
                                 .long("list_file")
@@ -188,13 +188,14 @@ fn main() {
                                 .long("cutoff-time")
                                 .value_parser(clap::value_parser!(u64)),
                             Arg::new("list_output")
-                                .help("Output plain comma-separated list")
+                                .help("Output plain comma-separated list instead of JSON")
                                 .long("list")
                                 .short('l')
                                 .action(ArgAction::SetTrue),
                         ]),
                     Command::new("active_asn_to_inactive")
-                        .about("Convert a list of active ASNs to a list of inactive ASNs by looking through the registry")
+                        .about("Convert a list of active ASNs to a list of inactive ASNs by \
+                        looking through the registry. Optionally check git log for activity.")
                         .args([
                             Arg::new("list_file")
                                 .long("list_file")
