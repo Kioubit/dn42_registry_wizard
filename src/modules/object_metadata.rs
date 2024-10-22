@@ -1,14 +1,15 @@
 use crate::modules::object_reader::registry_objects_to_iter;
 use crate::modules::util::BoxResult;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
-pub fn output(registry_root: String, target_folder: String,
+pub fn output(registry_root: &Path, object_type: &str,
               exclusive_fields: Option<Vec<String>>, filtered_fields: Option<Vec<String>>,
               skip_empty: bool
 ) -> BoxResult<String> {
-    let sub_path = "data/".to_owned() + &*target_folder;
+    let sub_path = PathBuf::from("data/").join(Path::new(object_type));
     let mut objects = HashMap::new();
-    let mut registry = registry_objects_to_iter(&registry_root, sub_path.as_str())?;
+    let mut registry = registry_objects_to_iter(registry_root, &sub_path)?;
     if let Some(exclusive_fields) = exclusive_fields {
         registry.add_exclusive_fields(exclusive_fields);
     }

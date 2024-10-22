@@ -2,7 +2,7 @@ use crate::modules::object_reader;
 use crate::modules::object_reader::registry_objects_to_iter;
 use crate::modules::util::BoxResult;
 use std::net::IpAddr;
-use std::path::PathBuf;
+use std::path::Path;
 use std::str::FromStr;
 
 static STATIC_ENTRIES: [(&str, &str); 7] = [
@@ -16,7 +16,7 @@ static STATIC_ENTRIES: [(&str, &str); 7] = [
 ];
 
 
-pub fn output_forward_zones(registry_root: String, auth_servers: Vec<String>) -> BoxResult<String> {
+pub fn output_forward_zones(registry_root: &Path, auth_servers: Vec<String>) -> BoxResult<String> {
     let mut output = String::new();
     let mut objects = read_tld_objects(registry_root, true)
         .map_err(|e| format!("Error reading objects: {}", e))?;
@@ -47,13 +47,13 @@ pub fn output_forward_zones(registry_root: String, auth_servers: Vec<String>) ->
     Ok(output)
 }
 
-pub fn output_tas(registry_root: String) -> BoxResult<String> {
+pub fn output_tas(registry_root: &Path) -> BoxResult<String> {
     let mut output = String::new();
     let objects = read_tld_objects(registry_root, false)
         .map_err(|e| format!("Error reading objects: {}", e))?;
     for object in objects {
         if object.ds_rdata.is_empty() {
-            output+= format!("addNTA(\"{}\")\n", object.tld).as_str();
+            output += format!("addNTA(\"{}\")\n", object.tld).as_str();
             continue;
         }
         for ta in object.ds_rdata {
@@ -160,9 +160,9 @@ fn parse_reverse_ip_notation(n: &str, is_v6: bool) -> String {
 }
 
 
-fn read_tld_objects(registry_root: String, show_nameserver_note: bool) -> BoxResult<Vec<TldObject>> {
+fn read_tld_objects(registry_root: &Path, show_nameserver_note: bool) -> BoxResult<Vec<TldObject>> {
     let mut tld_objects: Vec<TldObject> = Vec::new();
-    let mut registry_objects = registry_objects_to_iter(&registry_root, "data/dns")?;
+    let mut registry_objects = registry_objects_to_iter(registry_root, Path::new("data/dns"))?;
     registry_objects.add_filename_filter(".");
     registry_objects.add_exclusive_fields(vec![
         String::from("domain"),
@@ -185,16 +185,16 @@ fn read_tld_objects(registry_root: String, show_nameserver_note: bool) -> BoxRes
     }
 
     for entry in STATIC_ENTRIES {
-        tld_objects.push(get_static_entry(&registry_root, entry, show_nameserver_note)?);
+        tld_objects.push(get_static_entry(registry_root, entry, show_nameserver_note)?);
     }
 
     Ok(tld_objects)
 }
 
 
-fn get_static_entry(registry_root: &str, entry: (&str, &str), show_nameserver_note: bool) -> BoxResult<TldObject> {
-    let file = registry_root.to_owned() + "/data/" + entry.1;
-    let registry_kv = object_reader::read_registry_object_kv(PathBuf::from(file))?;
+fn get_static_entry(registry_root: &Path, entry: (&str, &str), show_nameserver_note: bool) -> BoxResult<TldObject> {
+    let file = registry_root.join("data").join(entry.1);
+    let registry_kv = object_reader::read_registry_object_kv(&file)?;
 
     let mut tld_builder = TldObjectBuilder::new();
     tld_builder.tld = Some(entry.0.to_owned());

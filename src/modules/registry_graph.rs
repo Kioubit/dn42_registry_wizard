@@ -5,6 +5,7 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::path::Path;
 use std::rc::{Rc, Weak};
 
 #[derive(Debug)]
@@ -98,12 +99,12 @@ where
 
 pub(crate) type RegistryGraph<M> = HashMap<String, Vec<Rc<LinkedRegistryObject<M>>>>;
 
-pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: String, registry_schema: &Vec<Schema>) -> BoxResult<RegistryGraph<M>> {
+pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: &Path, registry_schema: &Vec<Schema>) -> BoxResult<RegistryGraph<M>> {
     let mut object_list: RegistryGraph<M> = HashMap::new();
 
     for schema in registry_schema {
         eprintln!("Reading {:?}", &("data/".to_owned() + &schema.name));
-        let objects = read_registry_objects(registry_root.clone(), &("data/".to_owned() + &schema.name), false);
+        let objects = read_registry_objects(registry_root, Path::new(&("data/".to_owned() + &schema.name)), false);
         if objects.is_err() {
             eprintln!("Error accessing directory referred to by schema: {}", schema.name.clone());
             continue;
@@ -196,10 +197,10 @@ pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: String, re
 }
 
 
-pub(crate) fn parse_registry_schema(registry_root: String) -> BoxResult<Vec<Schema>> {
+pub(crate) fn parse_registry_schema(registry_root: &Path) -> BoxResult<Vec<Schema>> {
     let mut schemata = Vec::<Schema>::new();
 
-    let schema_objects = read_registry_objects(registry_root, "data/schema", false)?;
+    let schema_objects = read_registry_objects(registry_root, Path::new("data/schema"), false)?;
     for schema_object in schema_objects {
         if schema_object.filename == "SCHEMA-SCHEMA" {
             continue;

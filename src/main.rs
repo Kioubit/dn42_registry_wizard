@@ -3,6 +3,7 @@ use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Command};
 use roa_wizard_lib::{generate_bird, generate_json};
 use std::io;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::exit;
 use crate::modules::registry_remove::RemovalCategory;
 
@@ -236,14 +237,18 @@ fn main() {
         ],
     ).get_matches();
 
-    let mut base_path = cmd.get_one::<String>("registry_root").unwrap().to_owned();
-    if !base_path.ends_with('/') {
-        base_path.push('/');
-    }
+    let base_path = cmd.get_one::<String>("registry_root").unwrap().to_owned();
+    let base_path = PathBuf::from(base_path);
 
     match cmd.subcommand() {
         Some(("roa", c)) => {
             let is_strict = c.get_one::<bool>("strict").unwrap();
+            
+            let mut base_path = base_path.to_string_lossy().to_string();
+            if !base_path.ends_with('/') {
+                base_path.push('/');
+            }
+            
             match c.subcommand() {
                 Some(("v4", _)) => {
                     roa_wizard_lib::check_and_output(generate_bird(base_path, false), *is_strict)
@@ -261,10 +266,10 @@ fn main() {
             match c.subcommand() {
                 Some(("zones", d)) => {
                     let auth_servers: Vec<String> = d.get_many("authoritative_servers").unwrap().cloned().collect();
-                    output_result(modules::zone_files::output_forward_zones(base_path, auth_servers));
+                    output_result(modules::zone_files::output_forward_zones(&base_path, auth_servers));
                 }
                 Some(("tas", _)) => {
-                    output_result(modules::zone_files::output_tas(base_path));
+                    output_result(modules::zone_files::output_tas(&base_path));
                 }
                 _ => unreachable!()
             }
@@ -285,7 +290,7 @@ fn main() {
                 exclusive_fields = Some(l);
             }
             let result = modules::object_metadata::output(
-                base_path, object_type, exclusive_fields, filtered_fields, skip_empty,
+                &base_path, &object_type, exclusive_fields, filtered_fields, skip_empty,
             );
             output_result(result)
         }
@@ -302,7 +307,7 @@ fn main() {
                         obj_name = Some(c.get_one::<String>("object_name").unwrap().clone());
                     }
 
-                    let result = modules::registry_graph_tools::output_list(base_path, obj_type, obj_name, graphviz);
+                    let result = modules::registry_graph_tools::output_list(&base_path, obj_type, obj_name, graphviz);
                     output_result(result)
                 }
                 Some(("related", c)) => {
@@ -319,7 +324,7 @@ fn main() {
                         None
                     };
                     let graphviz = *c.get_one::<bool>("graphviz").unwrap();
-                    let result = modules::registry_graph_tools::output_related(base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, graphviz);
+                    let result = modules::registry_graph_tools::output_related(&base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, graphviz);
                     output_result(result)
                 }
                 Some(("path", c)) => {
@@ -327,7 +332,7 @@ fn main() {
                     let tgt_type = c.get_one::<String>("tgt_object_type").unwrap().clone();
                     let src_name = c.get_one::<String>("src_object_name").unwrap().clone();
                     let tgt_name = c.get_one::<String>("tgt_object_name").unwrap().clone();
-                    let result = modules::registry_graph_tools::output_path(base_path, src_type, tgt_type, src_name, tgt_name);
+                    let result = modules::registry_graph_tools::output_path(&base_path, src_type, tgt_type, src_name, tgt_name);
                     output_result(result)
                 }
                 _ => unreachable!()
@@ -336,10 +341,10 @@ fn main() {
         Some(("hierarchical_prefixes", c)) => {
             let result = match c.subcommand() {
                 Some(("v4", _)) => {
-                    modules::hierarchical_prefixes::output(base_path, true)
+                    modules::hierarchical_prefixes::output(&base_path, true)
                 }
                 Some(("v6", _)) => {
-                    modules::hierarchical_prefixes::output(base_path, false)
+                    modules::hierarchical_prefixes::output(&base_path, false)
                 }
                 _ => unreachable!()
             };
@@ -350,12 +355,12 @@ fn main() {
                 Some(("mnt", c)) => {
                     let input = get_input_list(c);
                     let enable_subgraph_check = *c.get_one::<bool>("enable_subgraph_check").unwrap();
-                    modules::registry_remove::output(base_path, input, RemovalCategory::Mnt, enable_subgraph_check)
+                    modules::registry_remove::output(&base_path, input, RemovalCategory::Mnt, enable_subgraph_check)
                 }
                 Some(("aut-num", c)) => {
                     let input = get_input_list(c);
                     let enable_subgraph_check = *c.get_one::<bool>("enable_subgraph_check").unwrap();
-                    modules::registry_remove::output(base_path, input, RemovalCategory::Asn, enable_subgraph_check)
+                    modules::registry_remove::output(&base_path, input, RemovalCategory::Asn, enable_subgraph_check)
                 }
                 _ => unreachable!()
             };
@@ -372,7 +377,7 @@ fn main() {
                 Some(("active_asn_to_inactive", c)) => {
                     let input = get_input_list(c);
                     let cutoff_time = c.get_one::<u64>("cutoff_time").cloned();
-                    modules::inactive_asns::output(base_path, input, cutoff_time)
+                    modules::inactive_asns::output(&base_path, input, cutoff_time)
                 }
                 _ => unreachable!()
             };

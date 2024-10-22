@@ -1,4 +1,5 @@
 use std::cell::{RefCell, RefMut};
+use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use cidr_utils::cidr::IpCidr;
@@ -24,11 +25,11 @@ struct IpCidrDef(
 );
 
 
-pub fn output(registry_root: String, v4: bool) -> util::BoxResult<String> {
-    let inetnum_path: &str = if v4 {
-        "data/inetnum/"
+pub fn output(registry_root: &Path, v4: bool) -> util::BoxResult<String> {
+    let inetnum_path: &Path = if v4 {
+        Path::new("data/inetnum/")
     } else {
-        "data/inet6num/"
+        Path::new("data/inet6num/")
     };
 
 

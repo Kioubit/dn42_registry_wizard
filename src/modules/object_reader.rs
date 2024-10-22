@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::read_dir;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 
 #[derive(Debug, Serialize)]
@@ -55,13 +55,13 @@ impl Iterator for RegistryObjectIterator {
         }
 
         if self.enumerate_only {
-            return Some(Ok(RegistryObject{
+            return Some(Ok(RegistryObject {
                 key_value: Default::default(),
                 filename: path.0,
             }));
         }
 
-        let obj = read_registry_object_kv_filtered(path.1, &self.exclusive_fields.borrow(), &self.filtered_fields.borrow());
+        let obj = read_registry_object_kv_filtered(&path.1, &self.exclusive_fields.borrow(), &self.filtered_fields.borrow());
         match obj {
             Ok(obj) => {
                 Some(Ok(RegistryObject {
@@ -74,7 +74,7 @@ impl Iterator for RegistryObjectIterator {
     }
 }
 
-pub fn registry_objects_to_iter(registry_root: &str, sub_path: &str) -> BoxResult<RegistryObjectIterator> {
+pub fn registry_objects_to_iter(registry_root: &Path, sub_path: &Path) -> BoxResult<RegistryObjectIterator> {
     let paths = get_object_paths(registry_root, sub_path)?;
     Ok(RegistryObjectIterator {
         paths,
@@ -85,9 +85,10 @@ pub fn registry_objects_to_iter(registry_root: &str, sub_path: &str) -> BoxResul
     })
 }
 
-fn get_object_paths(registry_root: &str, sub_path: &str) -> BoxResult<Vec<(String, PathBuf)>> {
-    let target_path = registry_root.to_string() + sub_path;
-    let dir = read_dir(target_path)?;
+fn get_object_paths(registry_root: &Path, sub_path: &Path) -> BoxResult<Vec<(String, PathBuf)>> {
+    let target_path = registry_root.join(sub_path);
+    let dir = read_dir(&target_path)
+        .map_err(|e| format!("Error opening directory {}: {}", target_path.display(), e))?;
     let mut paths = Vec::<(String, PathBuf)>::new();
     for file_result in dir {
         let file = file_result?.path();
@@ -100,8 +101,8 @@ fn get_object_paths(registry_root: &str, sub_path: &str) -> BoxResult<Vec<(Strin
     Ok(paths)
 }
 
-pub fn read_registry_objects(registry_root: String, sub_path: &str, enumerate_only: bool) -> BoxResult<Vec<RegistryObject>> {
-    let paths = get_object_paths(&registry_root, sub_path)?;
+pub fn read_registry_objects(registry_root: &Path, sub_path: &Path, enumerate_only: bool) -> BoxResult<Vec<RegistryObject>> {
+    let paths = get_object_paths(registry_root, sub_path)?;
 
     let mut objects = Vec::<RegistryObject>::new();
 
@@ -109,7 +110,7 @@ pub fn read_registry_objects(registry_root: String, sub_path: &str, enumerate_on
         let map = if enumerate_only {
             HashMap::<String, Vec<String>>::new()
         } else {
-            read_registry_object_kv(path.1)?
+            read_registry_object_kv(&path.1)?
         };
 
         objects.push(RegistryObject {
@@ -121,15 +122,15 @@ pub fn read_registry_objects(registry_root: String, sub_path: &str, enumerate_on
     Ok(objects)
 }
 
-pub fn read_registry_object_kv(path: PathBuf) -> BoxResult<HashMap<String, Vec<String>>> {
+pub fn read_registry_object_kv(path: &Path) -> BoxResult<HashMap<String, Vec<String>>> {
     read_registry_object_kv_filtered(path, &None, &None)
 }
 
-pub fn read_registry_object_kv_filtered(path: PathBuf, exclusive_fields: &Option<Vec<String>>,
+pub fn read_registry_object_kv_filtered(path: &Path, exclusive_fields: &Option<Vec<String>>,
                                         filtered_fields: &Option<Vec<String>>)
                                         -> BoxResult<HashMap<String, Vec<String>>> {
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
-    let lines = util::read_lines(&path)?;
+    let lines = util::read_lines(path)?;
     for line in lines {
         if let Some(result) = line?.split_once(':') {
             let obj_key = result.0.trim_end();

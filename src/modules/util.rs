@@ -13,17 +13,18 @@ pub enum EitherOr<X, Y> {
     B(Y),
 }
 
-pub(crate) fn read_lines<P>(path: P) -> io::Result<io::Lines<io::BufReader<File>>>
+pub(crate) fn read_lines<P>(path: P) -> BoxResult<io::Lines<io::BufReader<File>>>
 where
     P: AsRef<Path>,
 {
-    let file = File::open(path)?;
+    let file = File::open(&path)
+        .map_err(|e| format!("Error opening {}: {}", path.as_ref().display(), e))?;
     Ok(io::BufReader::new(file).lines())
 }
 
-pub(crate) fn walk_dir(path: impl AsRef<Path>, max_depth: i32) -> io::Result<Vec<PathBuf>> {
+pub(crate) fn walk_dir(path: impl AsRef<Path>, max_depth: i32) -> BoxResult<Vec<PathBuf>> {
     if max_depth == 0 {
-        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "max depth reached"));
+        return Err("max depth reached".into());
     }
     let mut buf = vec![];
     let entries = fs::read_dir(path)?;
@@ -56,7 +57,7 @@ pub(crate) fn get_item_list(data_input: EitherOr<String,String>) -> BoxResult<St
     }
 }
 
-pub(crate) fn get_last_git_activity(registry_root: &str, path: &str) -> BoxResult<u64> {
+pub(crate) fn get_last_git_activity(registry_root: &Path, path: &Path) -> BoxResult<u64> {
     let cmd_output = Command::new("git")
         .arg("log")
         .arg("-1")

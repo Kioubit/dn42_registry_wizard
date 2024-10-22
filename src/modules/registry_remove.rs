@@ -2,6 +2,7 @@ use crate::modules::registry_graph::{create_registry_graph, link_visit, parse_re
 use crate::modules::util::{get_item_list, BoxResult, EitherOr};
 use serde::Serialize;
 use std::cell::Cell;
+use std::path::Path;
 use std::rc::Rc;
 
 
@@ -26,7 +27,7 @@ impl RemovalCategory {
     }
 }
 
-pub fn output(registry_root: String, data_input: EitherOr<String, String>,
+pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
               removal_category: RemovalCategory,
               with_subgraph_check: bool) -> BoxResult<String> {
     if !with_subgraph_check {
@@ -36,8 +37,8 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
     let raw_list = get_item_list(data_input)?;
 
     let mut output = String::new();
-    let registry_schema = parse_registry_schema(registry_root.to_owned())?;
-    let graph = create_registry_graph::<MetaData>(registry_root.to_owned(), &registry_schema)?;
+    let registry_schema = parse_registry_schema(registry_root)?;
+    let graph = create_registry_graph::<MetaData>(registry_root, &registry_schema)?;
 
     let removal_list: Vec<String>;
     let affected_graph;
@@ -151,7 +152,7 @@ pub fn output(registry_root: String, data_input: EitherOr<String, String>,
     eprintln!("Analyzing dependency graph (4/6)");
     // Check if weakly referenced objects have dangling references
     for w in WEAKLY_REFERENCING {
-        let empty_vec = vec![];
+        let empty_vec = Vec::new();
         let w_list: Vec<_> = graph.get(w)
             .unwrap_or(&empty_vec)
             .iter().collect();

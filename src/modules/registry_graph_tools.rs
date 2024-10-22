@@ -3,11 +3,12 @@ use crate::modules::registry_graphviz::create_graphviz;
 use crate::modules::util::BoxResult;
 use serde::Serialize;
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 
-pub fn output_list(registry_root: String, obj_type: Option<String>, object_name: Option<String>, graphviz: bool) -> BoxResult<String> {
-    let registry_schema = parse_registry_schema(registry_root.to_owned())?;
-    let graph = create_registry_graph::<()>(registry_root.to_owned(), &registry_schema)?;
+pub fn output_list(registry_root: &Path, obj_type: Option<String>, object_name: Option<String>, graphviz: bool) -> BoxResult<String> {
+    let registry_schema = parse_registry_schema(registry_root)?;
+    let graph = create_registry_graph::<()>(registry_root, &registry_schema)?;
     match obj_type {
         None => {
             if graphviz {
@@ -42,11 +43,11 @@ pub fn output_list(registry_root: String, obj_type: Option<String>, object_name:
     }
 }
 
-pub fn output_related(registry_root: String, obj_type: String,
+pub fn output_related(registry_root: &Path, obj_type: String,
                       obj_name: String, enforce_mnt_by: Option<String>, only_related_to_mnt: Option<String>,
                       graphviz: bool,
 ) -> BoxResult<String> {
-    let schema = parse_registry_schema(registry_root.to_owned())?;
+    let schema = parse_registry_schema(registry_root)?;
     let graph = create_registry_graph::<()>(registry_root, &schema)?;
     let t_obj = graph.get(&obj_type).ok_or("specified object type not found")?
         .iter().find(|x| x.object.filename == obj_name)
@@ -98,13 +99,13 @@ pub fn output_related(registry_root: String, obj_type: String,
 }
 
 
-pub fn output_path(registry_root: String, src_type: String, tgt_type: String,
+pub fn output_path(registry_root: &Path, src_type: String, tgt_type: String,
                    src_name: String, tgt_name: String) -> BoxResult<String> {
     #[derive(Default, Debug, Serialize)]
     struct ParentInfo(RefCell<Option<Rc<LinkedRegistryObject<ParentInfo>>>>);
     impl ExtraDataTrait for ParentInfo {}
 
-    let schema = parse_registry_schema(registry_root.to_owned())?;
+    let schema = parse_registry_schema(registry_root)?;
     let graph = create_registry_graph::<ParentInfo>(registry_root, &schema)?;
     let s_obj = graph.get(&src_type)
         .ok_or("specified src object type not found")?
