@@ -29,7 +29,7 @@ fn main() {
                     roa_wizard_lib::check_and_output(generate_bird(base_path, true), is_strict)
                 }
                 Some(("json", _)) => {
-                    roa_wizard_lib::check_and_output(generate_json(base_path.to_owned()), is_strict)
+                    roa_wizard_lib::check_and_output(generate_json(base_path), is_strict)
                 }
                 _ => unreachable!(),
             }
@@ -165,9 +165,13 @@ fn main() {
 
 
 fn output_result(result: BoxResult<String>) {
-    if result.is_err() {
-        writeln!(io::stderr(), "{}", result.unwrap_err()).ok();
-        exit(1);
-    }
-    writeln!(io::stdout(), "{}", result.unwrap()).ok();
+    match result {
+        Ok(s) => {
+            writeln!(io::stdout(), "{}", s).ok()
+        }
+        Err(err) => {
+            writeln!(io::stderr(), "{}", err).ok();
+            exit(1);
+        }
+    };
 }
