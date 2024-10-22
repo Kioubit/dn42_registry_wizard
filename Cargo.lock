@@ -603,8 +603,8 @@ dependencies = [
 
 [[package]]
 name = "roa_wizard"
-version = "0.1.8"
-source = "git+https://github.com/Kioubit/roa_wizard.git?tag=0.1.8#eb14abab3d78f57ab9aae850226f55183ae0bdc2"
+version = "0.1.9"
+source = "git+https://github.com/Kioubit/roa_wizard.git?tag=0.1.9#d676e17d46ba05a1abe7e630983eb32b73c2ec66"
 dependencies = [
  "cidr-utils",
  "json",
