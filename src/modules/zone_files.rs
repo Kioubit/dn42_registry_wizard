@@ -18,30 +18,61 @@ static STATIC_ENTRIES: [(&str, &str); 7] = [
 
 pub fn output_forward_zones(registry_root: &Path, auth_servers: Vec<String>) -> BoxResult<String> {
     let mut output = String::new();
+    let auth_servers = auth_servers.iter().map(|s| {
+        IpAddr::from_str(s)
+            .map(|parsed| {
+                if parsed.is_ipv6() {
+                    String::from('\'') + &*parsed.to_string() + "\'"
+                } else {
+                    parsed.to_string()
+                }
+            }).map_err(|e| format!("Could not parse provided authoritative server IP '{}' : {}", s, e))
+    }).collect::<Result<Vec<String>, String>>()?;
+
     let mut objects = read_tld_objects(registry_root, true)
         .map_err(|e| format!("Error reading objects: {}", e))?;
     objects.sort_by(|a, b| a.tld.cmp(&b.tld));
     output += "recursor:\n";
     output += "  forward_zones:\n";
     for object in objects {
-        let current_auth_servers: Vec<String> = if object.n_server_v4.is_empty() && object.n_server_v6.is_empty() {
-            auth_servers.iter().map(|s| {
-                IpAddr::from_str(s)
-                    .map(|parsed| {
-                        if parsed.is_ipv6() {
-                            String::from('\'') + &*parsed.to_string() + "\'"
-                        } else {
-                            parsed.to_string()
-                        }
-                    }).map_err(|e| format!("Could not parse provided authoritative server IP {}", e))
-            }).collect::<Result<Vec<String>, String>>()?
+        let current_auth_servers: &Vec<String> = if object.n_server_v4.is_empty() && object.n_server_v6.is_empty() {
+            &auth_servers
         } else {
-            object.n_server_v4.into_iter().chain(object.n_server_v6.into_iter().map(|s| "'".to_owned() + &*s + "'")).collect()
+            &object.n_server_v4.into_iter().chain(object.n_server_v6.into_iter().map(|s| "'".to_owned() + &*s + "'")).collect()
         };
         output += format!("  - zone: '{}'\n", object.tld).as_str();
         output += "    forwarders:\n";
         for auth_server in current_auth_servers {
             output += format!("    - {}\n", auth_server).as_str();
+        }
+    }
+    Ok(output)
+}
+
+
+
+pub fn output_forward_zones_legacy(registry_root: &Path, auth_servers: Vec<String>) -> BoxResult<String>{
+    let mut output = String::new();
+    let mut objects = read_tld_objects(registry_root, true)
+        .map_err(|e| format!("Error reading objects: {}", e))?;
+    objects.sort_by(|a,b | a.tld.cmp(&b.tld));
+    let mut first = true;
+    for object in objects {
+        let current_auth_servers: Vec<String> = if object.n_server_v4.is_empty() && object.n_server_v6.is_empty() {
+            auth_servers.iter().map(|s| {
+                    IpAddr::from_str(s)
+                    .map(|x | x.to_string())
+                    .map_err(|e| format!("Could not parse provided authoritative server IP '{}' : {}", s, e))
+            }).collect::<Result<Vec<String>, String>>()?
+        } else {
+            object.n_server_v4.into_iter().chain(object.n_server_v6.into_iter()).collect()
+        };
+        for auth_server in current_auth_servers {
+            if first {
+                output += &format!("forward-zones={}={}\n", object.tld, auth_server);
+                first = false;
+            }
+            output += &format!("forward-zones+={}={}\n", object.tld, auth_server);
         }
     }
     Ok(output)
@@ -202,7 +233,9 @@ fn get_static_entry(registry_root: &Path, entry: (&str, &str), show_nameserver_n
     if let Some(v) = registry_kv.get("ds-rdata") {
         tld_builder.ds_rdata.extend(v.iter().cloned());
     }
-    tld_builder.n_server.push("delegation-servers.dn42".to_string());
+    if let Some(v) = registry_kv.get("nserver") {
+        tld_builder.n_server.extend(v.iter().cloned());
+    }
 
     let result = tld_builder.build(true, show_nameserver_note)?;
     Ok(result)

@@ -40,6 +40,13 @@ pub fn get_arg_matches() -> ArgMatches {
                                 .required(true)
                                 .num_args(1..)
                         ),
+                    Command::new("zones-legacy").about("Output zone files (legacy format)")
+                        .arg(
+                            Arg::new("authoritative_servers")
+                                .help("List of default authoritative servers (comma separated)")
+                                .required(true)
+                                .num_args(1..)
+                        ),
                     Command::new("tas").about("Output trust anchors"),
                 ]),
             Command::new("object_metadata")
