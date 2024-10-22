@@ -35,10 +35,12 @@ pub fn output_forward_zones(registry_root: &Path, auth_servers: Vec<String>) -> 
     output += "recursor:\n";
     output += "  forward_zones:\n";
     for object in objects {
+        let hoist;
         let current_auth_servers: &Vec<String> = if object.n_server_v4.is_empty() && object.n_server_v6.is_empty() {
             &auth_servers
         } else {
-            &object.n_server_v4.into_iter().chain(object.n_server_v6.into_iter().map(|s| "'".to_owned() + &*s + "'")).collect()
+            hoist = object.n_server_v4.into_iter().chain(object.n_server_v6.into_iter().map(|s| "'".to_owned() + &*s + "'")).collect();
+            &hoist
         };
         output += format!("  - zone: '{}'\n", object.tld).as_str();
         output += "    forwarders:\n";
