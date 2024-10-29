@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Registry explorer</title>
+    <style>
+        body {
+            overflow-y: scroll;
+        }
+
+        .noDisplay {
+            display: none;
+        }
+
+        #mainTable {
+            & thead {
+                text-align: left;
+                & th {
+                    vertical-align: bottom;
+                    border-bottom: 2px solid #073648;
+                }
+                & tr th {
+                    font-weight: lighter;
+                }
+            }
+            & {
+                display: block;
+                overflow-x: auto;
+                border-collapse: collapse;
+                overflow-wrap: anywhere;
+            }
+
+            & tbody tr td {
+                padding-top: 0.75rem;
+            }
+
+            & tbody tr td:first-child {
+                color: #195e00;
+                min-width: 7em;
+                vertical-align: top;
+            }
+        }
+
+        #dataDisplayDiv {
+            padding-right: 1em;
+            padding-left: 1em;
+        }
+
+        #searchDisplayDiv {
+            padding-right: 1em;
+            padding-left: 1em;
+            overflow-x: auto;
+        }
+
+        .badge {
+            color: #fff;
+            background-color: #073642;
+            margin-left: 2em;
+            display: inline-block;
+            padding: 0.25em 0.4em;
+            font-size: 75%;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 0.25rem;
+        }
+
+        body {
+            padding-left: 0.5em;
+            padding-right: 0.5em;
+        }
+
+        #searchBox {
+            font-size: 1.2em;
+            height: 2em;
+            max-width: 28em;
+            width: 100%;
+            min-width: 10em;
+        }
+
+        @media only screen and (max-width:900px) {
+            #title {
+                order: 0 !important;
+            }
+        }
+        #title {
+            order: 1;
+        }
+
+        #statDisplay {
+            margin: 0 auto;
+            max-width: 40em;
+        }
+
+        #statDisplayInner {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(10em, 12em));
+            justify-content: center;
+        }
+
+        #showMoreBtnDiv {
+            margin-top: 0.3em;
+        }
+
+        #titleBar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            column-gap: 3em;
+        }
+
+        #searchBoxOuter {
+            max-width: 100%;
+            flex: 1;
+        }
+
+        .word-break-all {
+            word-break: break-all;
+        }
+        .mt-3 {
+            margin-top: 3em;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <div id="titleBar">
+        <h1 id="title">Registry explorer</h1>
+        <div id="searchBoxOuter">
+            <input id="searchBox" type="search" placeholder="Search here...">
+        </div>
+    </div>
+</div>
+<hr>
+<div id="waitDiv">
+    Please wait...
+</div>
+<div id="searchDisplayDiv" class="noDisplay">
+</div>
+<div id="dataDisplayDiv" class="noDisplay">
+    <h2 class="word-break-all"><a id="dataTitleDisplay" href="#"></a></h2>
+    <table id="mainTable">
+        <thead>
+        <tr>
+            <th>Key</th>
+            <th>Value</th>
+        </tr>
+        </thead>
+        <tbody id="dataTableBody">
+        </tbody>
+    </table>
+    <div class="mt-3">
+        <u>Referenced by:</u>
+        <table id="backLinkDisplay"></table>
+    </div>
+</div>
+<div id="statDisplay" class="noDisplay">
+    <h3>Object statistics</h3>
+    <div id="statDisplayInner"></div>
+</div>
+</body>
+<script src="explorer.js"></script>
+</html>

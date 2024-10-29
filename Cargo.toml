@@ -1,17 +1,31 @@
 [package]
 name = "registry_wizard"
-version = "0.3.12"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
 roa_wizard = { git = "https://github.com/Kioubit/roa_wizard.git", tag = "0.1.9" }
 cidr-utils = "0.6.1"
-serde = { version = "1.0.213", features = ["derive", "rc"] }
+serde = { version = "1.0.214", features = ["derive", "rc"] }
 serde_json = "1.0.132"
-bgpkit-parser = { version = "0.10.11" , default-features = false, features = ["parser", "oneio"]}
+bgpkit-parser = { version = "0.10.11", default-features = false, features = ["parser", "oneio"] }
 rayon = "1.10.0"
 clap = "4.5.20"
 dot = "0.1.4"
+axum = { version = "0.7.7", optional = true }
+tokio = { version = "1.41.0", features = ["rt-multi-thread", "signal"], optional = true }
+rust-embed = { version = "8.5.0", optional = true }
+mime_guess = { version = "2.0.5", optional = true }
+
+[features]
+default = ["explorer"]
+explorer = [
+    "axum",
+    "tokio",
+    "rust-embed",
+    "mime_guess"
+]
+
 
 [profile.release]
 opt-level = 3       # Enable all optimizations

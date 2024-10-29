@@ -126,6 +126,13 @@ fn main() {
             };
             output_result(result)
         }
+        #[cfg(feature = "explorer")]
+        Some(("explorer", c)) => {
+            use crate::modules::explorer::start_explorer;
+            let port = *c.get_one::<u16>("port").unwrap();
+            let result = start_explorer(&base_path, port);
+            output_result(result);
+        }
         Some(("remove", c)) => {
             let result = match c.subcommand() {
                 Some(("mnt", c)) => {

@@ -135,6 +135,17 @@ pub fn get_arg_matches() -> ArgMatches {
                     Command::new("v4").about("IPv4"),
                     Command::new("v6").about("IPv6"),
                 ]),
+            #[cfg(feature = "explorer")]
+            Command::new("explorer")
+                .about("Start web based registry explorer")
+                .args([
+                    Arg::new("port")
+                        .long("port")
+                        .short('p')
+                        .value_parser(clap::value_parser!(u16))
+                        .default_value("8080")
+                        .help("Port to listen on")
+                ]),
             Command::new("remove")
                 .about("Safely remove a list of registry objects along with all their dependencies")
                 .subcommand_required(true)

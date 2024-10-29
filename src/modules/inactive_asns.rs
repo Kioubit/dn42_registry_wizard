@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use crate::modules::object_reader::registry_objects_to_iter;
+use crate::modules::object_reader::{registry_objects_to_iter, RegistryObjectIterator, SimpleObjectLine};
 use crate::modules::util::{get_item_list, get_last_git_activity, BoxResult, EitherOr};
 
 pub fn output(registry_root: &Path, data_input: EitherOr<String, String>, cutoff_time: Option<u64>) -> BoxResult<String> {
@@ -12,7 +12,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>, cutoff
     eprintln!("Active ASN count: {}", active_asn.len());
     let active_asn = active_asn.into_iter()
         .map(|x| format!("AS{}", x.trim())).collect::<Vec<String>>();
-    let mut registry_iter = registry_objects_to_iter(registry_root, Path::new("data/aut-num"))?;
+    let mut registry_iter : RegistryObjectIterator<SimpleObjectLine> = registry_objects_to_iter(registry_root, Path::new("data/aut-num"))?;
     registry_iter.set_enumerate_only(true);
     
     let mut skipped_count: usize = 0;

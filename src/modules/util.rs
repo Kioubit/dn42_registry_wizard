@@ -13,7 +13,7 @@ pub enum EitherOr<X, Y> {
     B(Y),
 }
 
-pub(crate) fn read_lines<P>(path: P) -> BoxResult<io::Lines<io::BufReader<File>>>
+pub(in crate::modules) fn read_lines<P>(path: P) -> BoxResult<io::Lines<io::BufReader<File>>>
 where
     P: AsRef<Path>,
 {
@@ -22,7 +22,7 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
-pub(crate) fn walk_dir(path: impl AsRef<Path>, max_depth: i32) -> BoxResult<Vec<PathBuf>> {
+pub(in crate::modules) fn walk_dir(path: impl AsRef<Path>, max_depth: i32) -> BoxResult<Vec<PathBuf>> {
     if max_depth == 0 {
         return Err("max depth reached".into());
     }

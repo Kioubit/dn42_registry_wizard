@@ -9,3 +9,5 @@ pub mod registry_remove;
 mod registry_graphviz;
 pub mod inactive_asns;
 pub mod registry_graph_tools;
+#[cfg(feature = "explorer")]
+pub mod explorer;

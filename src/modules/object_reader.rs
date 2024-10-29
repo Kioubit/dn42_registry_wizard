@@ -3,17 +3,32 @@ use crate::modules::util::BoxResult;
 use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::fs::read_dir;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
 
-#[derive(Debug, Serialize)]
-pub struct RegistryObject {
-    pub key_value: HashMap<String, Vec<String>>,
+pub(in crate::modules) trait ObjectLine : Debug + Serialize + Clone {
+    type Output;
+
+    fn append_to_last(key: &mut Vec<Self::Output>, value: &str);
+    fn push_line(key :&mut Vec<Self::Output>, value: String, line: usize);
+    
+    fn get_value(&self) -> String;
+}
+
+pub(in crate::modules) type OrderedObjectLine = (usize, String);
+pub(in crate::modules) type SimpleObjectLine = String;
+
+#[derive(Debug, Serialize, Clone)]
+pub(in crate::modules) struct RegistryObject<T> where T: ObjectLine {
+    pub key_value: HashMap<String, Vec<T>>,
     pub filename: String,
 }
 
-pub struct RegistryObjectIterator {
+pub(in crate::modules) struct RegistryObjectIterator<T: ObjectLine> {
+    phantom: PhantomData<T>,
     paths: Vec<(String, PathBuf)>,
     filename_filter: Vec<String>,
     exclusive_fields: RefCell<Option<Vec<String>>>,
@@ -21,7 +36,7 @@ pub struct RegistryObjectIterator {
     enumerate_only: bool,
 }
 
-impl RegistryObjectIterator {
+impl<T: ObjectLine> RegistryObjectIterator<T> {
     pub fn set_enumerate_only(&mut self, state: bool) -> &Self {
         self.enumerate_only = state;
         self
@@ -40,8 +55,8 @@ impl RegistryObjectIterator {
     }
 }
 
-impl Iterator for RegistryObjectIterator {
-    type Item = BoxResult<RegistryObject>;
+impl<T: ObjectLine<Output=T>> Iterator for RegistryObjectIterator<T> {
+    type Item = BoxResult<RegistryObject<T>>;
     fn next(&mut self) -> Option<Self::Item> {
         let mut path: (String, PathBuf);
         loop {
@@ -74,9 +89,10 @@ impl Iterator for RegistryObjectIterator {
     }
 }
 
-pub fn registry_objects_to_iter(registry_root: &Path, sub_path: &Path) -> BoxResult<RegistryObjectIterator> {
+pub(in crate::modules) fn registry_objects_to_iter<T: ObjectLine>(registry_root: &Path, sub_path: &Path) -> BoxResult<RegistryObjectIterator<T>> {
     let paths = get_object_paths(registry_root, sub_path)?;
     Ok(RegistryObjectIterator {
+        phantom: Default::default(),
         paths,
         filename_filter: vec![],
         exclusive_fields: RefCell::new(None),
@@ -101,14 +117,14 @@ fn get_object_paths(registry_root: &Path, sub_path: &Path) -> BoxResult<Vec<(Str
     Ok(paths)
 }
 
-pub fn read_registry_objects(registry_root: &Path, sub_path: &Path, enumerate_only: bool) -> BoxResult<Vec<RegistryObject>> {
+pub(in crate::modules) fn read_registry_objects<T: ObjectLine<Output = T>>(registry_root: &Path, sub_path: &Path, enumerate_only: bool) -> BoxResult<Vec<RegistryObject<T>>> {
     let paths = get_object_paths(registry_root, sub_path)?;
 
-    let mut objects = Vec::<RegistryObject>::new();
+    let mut objects = Vec::<RegistryObject<T>>::new();
 
     for path in paths {
         let map = if enumerate_only {
-            HashMap::<String, Vec<String>>::new()
+            HashMap::<String, Vec<T>>::new()
         } else {
             read_registry_object_kv(&path.1)?
         };
@@ -122,17 +138,54 @@ pub fn read_registry_objects(registry_root: &Path, sub_path: &Path, enumerate_on
     Ok(objects)
 }
 
-pub fn read_registry_object_kv(path: &Path) -> BoxResult<HashMap<String, Vec<String>>> {
+pub(in crate::modules) fn read_registry_object_kv<T: ObjectLine<Output = T>>(path: &Path) -> BoxResult<HashMap<String, Vec<T>>> {
     read_registry_object_kv_filtered(path, &None, &None)
 }
 
-pub fn read_registry_object_kv_filtered(path: &Path, exclusive_fields: &Option<Vec<String>>,
-                                        filtered_fields: &Option<Vec<String>>)
-                                        -> BoxResult<HashMap<String, Vec<String>>> {
-    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+impl ObjectLine for SimpleObjectLine {
+    type Output = SimpleObjectLine;
+
+    fn append_to_last(key: &mut Vec<Self::Output>, value: &str) {
+        key.last_mut().unwrap().push_str(value)
+    }
+
+    fn push_line(key: &mut Vec<Self::Output>, value: String, _: usize) {
+        key.push(value)
+    }
+    fn get_value(&self) -> String {
+        self.clone()
+    }
+}
+
+impl ObjectLine for OrderedObjectLine {
+    type Output = OrderedObjectLine;
+
+    fn append_to_last(key: &mut Vec<Self::Output>, value: &str) {
+        let last = key.last_mut().unwrap();
+        last.1.push_str(value);
+    }
+
+    fn push_line(key: &mut Vec<Self::Output>, value: String, line: usize) {
+        key.push((line, value))
+    }
+    fn get_value(&self) -> String {
+        self.1.clone()
+    }
+}
+
+
+pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine<Output=T>>(path: &Path, exclusive_fields: &Option<Vec<String>>,
+                                         filtered_fields: &Option<Vec<String>>)
+                                         -> BoxResult<HashMap<String, Vec<T>>> {
+    let mut map: HashMap<String, Vec<T>> = HashMap::new();
     let lines = util::read_lines(path)?;
-    for line in lines {
-        if let Some(result) = line?.split_once(':') {
+    let mut last_obj_key : Option<String> = None;
+    for (no, line) in lines.into_iter().enumerate() {
+        let line = line?;
+        let split_result = line.split_once(':');
+        if !line.starts_with(' ') && split_result.is_some()  {
+            let result = split_result.unwrap();
+            last_obj_key = None;
             let obj_key = result.0.trim_end();
 
             if let Some(ref f) = exclusive_fields {
@@ -151,14 +204,29 @@ pub fn read_registry_object_kv_filtered(path: &Path, exclusive_fields: &Option<V
                 map.insert(obj_key.to_string(), Vec::new());
             }
             let key = map.get_mut(obj_key).unwrap();
-            key.push(result.1.trim().to_string())
+            //key.push(result.1.trim().to_string());
+            T::push_line(key, result.1.trim().to_string(), no);
+            last_obj_key = Some(obj_key.to_string());
+        } else if let Some(ref last_obj_key) = last_obj_key {
+            // Handle multi-line
+            let key = map.get_mut(last_obj_key).unwrap();
+            if line.starts_with('+') {
+                //key.last_mut().unwrap().push_str("\n\n");
+                T::append_to_last(key, "\n\n");
+            } else {
+                //key.last_mut().unwrap().push('\n');
+                //key.last_mut().unwrap().push_str(line.trim());
+                T::append_to_last(key, "\n");
+                T::append_to_last(key, line.trim());
+            }
         }
     }
 
     Ok(map)
 }
 
+
 #[allow(dead_code)]
-pub fn filter_objects_source(objects: &mut Vec<RegistryObject>, source: String) {
+pub(in crate::modules) fn filter_objects_source(objects: &mut Vec<RegistryObject<SimpleObjectLine>>, source: String) {
     objects.retain(|obj| obj.key_value.get("source").is_some_and(|x| x.first() == Some(&source)));
 }

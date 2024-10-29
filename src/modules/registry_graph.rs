@@ -1,4 +1,4 @@
-use crate::modules::object_reader::{read_registry_objects, RegistryObject};
+use crate::modules::object_reader::{read_registry_objects, ObjectLine, RegistryObject, SimpleObjectLine};
 use crate::modules::util::BoxResult;
 use serde::Serialize;
 use std::any::Any;
@@ -8,13 +8,13 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::rc::{Rc, Weak};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub(crate) struct Schema {
     pub name: String,
-    pub lookup_keys: Vec<SchemaField>,
+    pub keys: Vec<SchemaField>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub(crate) struct SchemaField {
     pub key: String,
     pub required: bool,
@@ -24,28 +24,30 @@ pub(crate) struct SchemaField {
 pub trait ExtraDataTrait: Serialize + Debug + Default + Any {}
 impl ExtraDataTrait for () {}
 
+type LinkInformation<M, T> = ((String,String),Weak<LinkedRegistryObject<M, T>>);
+
 #[derive(Debug, Serialize)]
-pub(crate) struct LinkedRegistryObject<M: ExtraDataTrait> {
+pub(crate) struct LinkedRegistryObject<M: ExtraDataTrait, T: ObjectLine> {
     pub category: String,
-    pub object: RegistryObject,
+    pub object: RegistryObject<T>,
     #[serde(serialize_with = "links_serialize")]
-    forward_links: RefCell<Vec<Weak<LinkedRegistryObject<M>>>>,
+    forward_links: RefCell<Vec<LinkInformation<M, T>>>,
     #[serde(serialize_with = "links_serialize")]
-    back_links: RefCell<Vec<Weak<LinkedRegistryObject<M>>>>,
+    back_links: RefCell<Vec<LinkInformation<M, T>>>,
     #[serde(skip_serializing_if = "is_unit_type")]
     pub extra: M,
 }
 
 pub(crate) const WEAKLY_REFERENCING: [&str; 2] = ["as-set", "route-set"];
 
-pub(crate) struct LinkIterator<'a, M: ExtraDataTrait> {
-    object: &'a LinkedRegistryObject<M>,
+pub(crate) struct LinkIterator<'a, M: ExtraDataTrait, T: ObjectLine> {
+    object: &'a LinkedRegistryObject<M, T>,
     index: usize,
     backlinks: bool,
 }
 
-impl<'a, M: ExtraDataTrait> Iterator for LinkIterator<'a, M> {
-    type Item = Rc<LinkedRegistryObject<M>>;
+impl<'a, M: ExtraDataTrait, T: ObjectLine> Iterator for LinkIterator<'a, M, T> {
+    type Item = ((String, String), Rc<LinkedRegistryObject<M, T>>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let lo = if self.backlinks {
@@ -56,19 +58,19 @@ impl<'a, M: ExtraDataTrait> Iterator for LinkIterator<'a, M> {
         let l = lo.get(self.index);
         self.index += 1;
 
-        l.map(|x| x.upgrade().unwrap())
+        l.map(|(a,b)| (a.clone(), b.upgrade().unwrap()))
     }
 }
 
-impl<M: ExtraDataTrait> LinkedRegistryObject<M> {
-    pub fn get_back_links(&self) -> LinkIterator<M> {
+impl<M: ExtraDataTrait, T: ObjectLine> LinkedRegistryObject<M, T> {
+    pub fn get_back_links(&self) -> LinkIterator<M, T> {
         LinkIterator {
             object: self,
             index: 0,
             backlinks: true,
         }
     }
-    pub fn get_forward_links(&self) -> LinkIterator<M> {
+    pub fn get_forward_links(&self) -> LinkIterator<M, T> {
         LinkIterator {
             object: self,
             index: 0,
@@ -81,15 +83,16 @@ fn is_unit_type<T: Any>(_: &T) -> bool {
     std::any::TypeId::of::<T>() == std::any::TypeId::of::<()>()
 }
 
-fn links_serialize<S, M>(x: &RefCell<Vec<Weak<LinkedRegistryObject<M>>>>, s: S) -> Result<S::Ok, S::Error>
+fn links_serialize<S, M, T>(x: &RefCell<Vec<LinkInformation<M, T>>>, s: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
     M: ExtraDataTrait,
+    T: ObjectLine,
 {
     let link_array = x.borrow()
         .iter()
         .filter_map(|x| {
-            x.upgrade().and_then(|x| {
+            x.1.upgrade().and_then(|x| {
                 format!("{}/{}", x.category, x.object.filename).into()
             })
         })
@@ -97,10 +100,10 @@ where
     link_array.serialize(s)
 }
 
-pub(crate) type RegistryGraph<M> = HashMap<String, Vec<Rc<LinkedRegistryObject<M>>>>;
+pub(crate) type RegistryGraph<M, T> = HashMap<String, Vec<Rc<LinkedRegistryObject<M, T>>>>;
 
-pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: &Path, registry_schema: &Vec<Schema>) -> BoxResult<RegistryGraph<M>> {
-    let mut object_list: RegistryGraph<M> = HashMap::new();
+pub(crate) fn create_registry_graph<M: ExtraDataTrait, T: ObjectLine<Output=T>>(registry_root: &Path, registry_schema: &Vec<Schema>, duplicate_forward_links: bool) -> BoxResult<RegistryGraph<M, T>> {
+    let mut object_list: RegistryGraph<M, T> = HashMap::new();
 
     for schema in registry_schema {
         eprintln!("Reading {:?}", &("data/".to_owned() + &schema.name));
@@ -127,7 +130,7 @@ pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: &Path, reg
         // For each object regardless of category
 
         let applicable_schema = registry_schema.iter().find(|x| x.name == *object.category).unwrap();
-        let schema_links = &applicable_schema.lookup_keys;
+        let schema_links = &applicable_schema.keys;
         for schema_link in schema_links {
             let schema_link_targets = &schema_link.lookup_targets;
             let schema_key = &schema_link.key;
@@ -151,7 +154,7 @@ pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: &Path, reg
                     }
                     let target_object = t_category.unwrap()
                         .iter()
-                        .find(|x| x.object.filename.to_uppercase() == *object_key_value);
+                        .find(|x| x.object.filename.to_uppercase() == *object_key_value.get_value());
                     if target_object.is_none() {
                         continue;
                     }
@@ -161,14 +164,16 @@ pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: &Path, reg
                     if !Rc::ptr_eq(target_object.unwrap(), object) {
                         let mut current_obj_forward_links = object.forward_links.borrow_mut();
                         let mut found = false;
-                        for obj in current_obj_forward_links.iter() {
-                            if Rc::ptr_eq(&obj.upgrade().unwrap(), target_object.unwrap()) {
-                                found = true;
-                                break;
+                        if !duplicate_forward_links {
+                            for obj in current_obj_forward_links.iter() {
+                                if Rc::ptr_eq(&obj.1.upgrade().unwrap(), target_object.unwrap()) {
+                                    found = true;
+                                    break;
+                                }
                             }
                         }
-                        if !found {
-                            current_obj_forward_links.push(Rc::downgrade(target_object.unwrap()));
+                        if !found || duplicate_forward_links {
+                            current_obj_forward_links.push(((schema_key.clone(), object_key_value.get_value()), Rc::downgrade(target_object.unwrap())));
                         }
                     }
                     // ----------------------------
@@ -178,13 +183,13 @@ pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: &Path, reg
                         let mut target_obj_back_links = target_object.unwrap().back_links.borrow_mut();
                         let mut found = false;
                         for obj in target_obj_back_links.iter() {
-                            if Rc::ptr_eq(&obj.upgrade().unwrap(), object) {
+                            if Rc::ptr_eq(&obj.1.upgrade().unwrap(), object) {
                                 found = true;
                                 break;
                             }
                         }
                         if !found {
-                            target_obj_back_links.push(Rc::downgrade(object));
+                            target_obj_back_links.push(((schema_key.clone(), object_key_value.get_value()), Rc::downgrade(object)));
                         }
                     }
                     // ----------------------------
@@ -197,14 +202,14 @@ pub(crate) fn create_registry_graph<M: ExtraDataTrait>(registry_root: &Path, reg
 }
 
 
-pub(crate) fn parse_registry_schema(registry_root: &Path) -> BoxResult<Vec<Schema>> {
+pub(crate) fn parse_registry_schema(registry_root: &Path, exclude_registry_key: bool) -> BoxResult<Vec<Schema>> {
     let mut schemata = Vec::<Schema>::new();
 
-    let schema_objects = read_registry_objects(registry_root, Path::new("data/schema"), false)?;
+    let schema_objects: Vec<RegistryObject<SimpleObjectLine>> = read_registry_objects(registry_root, Path::new("data/schema"), false)?;
     for schema_object in schema_objects {
-        if schema_object.filename == "SCHEMA-SCHEMA" {
-            continue;
-        }
+        //if schema_object.filename == "SCHEMA-SCHEMA" {
+        //    continue;
+        //}
 
         let mut name_vec = schema_object.key_value.get("dir-name");
         if name_vec.is_none() {
@@ -227,22 +232,26 @@ pub(crate) fn parse_registry_schema(registry_root: &Path) -> BoxResult<Vec<Schem
             continue;
         }
 
-        let mut lookup_targets: Vec<SchemaField> = Vec::new();
+        let mut schema_keys: Vec<SchemaField> = Vec::new();
         for key in key_option.unwrap() {
             let key_line = key.split_whitespace().collect::<Vec<&str>>();
             let required_field = *key_line.get(1).unwrap_or(&"") == "required";
 
             let lookup_key_target_position = key_line.get(3).unwrap_or(&"");
-            if !lookup_key_target_position.starts_with("lookup=") {
-                continue;
+            let mut lookup_key_targets : Vec<String> = Vec::new();
+            if lookup_key_target_position.starts_with("lookup=") {
+                lookup_key_targets = lookup_key_target_position.strip_prefix("lookup=")
+                    .unwrap().split(',')
+                    .filter_map(|s| s.strip_prefix("dn42."))
+                    .map(|x| x.to_string())
+                    .collect::<Vec<String>>();
+                if exclude_registry_key {
+                    lookup_key_targets.retain(|x| x != "registry")
+                }
             }
-            let lookup_key_targets = lookup_key_target_position.strip_prefix("lookup=")
-                .unwrap().split(',')
-                .filter_map(|s| s.strip_prefix("dn42."))
-                .filter(|x| *x != "registry")
-                .map(|x| x.to_string()).collect::<Vec<String>>();
+
             let lookup_key = key_line.first().unwrap();
-            lookup_targets.push(SchemaField {
+            schema_keys.push(SchemaField {
                 key: lookup_key.to_string(),
                 required: required_field,
                 lookup_targets: lookup_key_targets,
@@ -252,7 +261,7 @@ pub(crate) fn parse_registry_schema(registry_root: &Path) -> BoxResult<Vec<Schem
 
         schemata.push(Schema {
             name: name.to_string(),
-            lookup_keys: lookup_targets,
+            keys: schema_keys,
         });
     }
 
@@ -260,15 +269,15 @@ pub(crate) fn parse_registry_schema(registry_root: &Path) -> BoxResult<Vec<Schem
 }
 
 
-pub(crate) fn link_visit<M: ExtraDataTrait>(
-    obj: &Rc<LinkedRegistryObject<M>>, visited: &mut Vec<Rc<LinkedRegistryObject<M>>>,
-    to_visit: &mut Vec<Rc<LinkedRegistryObject<M>>>,
+pub(crate) fn link_visit<M: ExtraDataTrait, T: ObjectLine>(
+    obj: &Rc<LinkedRegistryObject<M, T>>, visited: &mut Vec<Rc<LinkedRegistryObject<M, T>>>,
+    to_visit: &mut Vec<Rc<LinkedRegistryObject<M, T>>>,
 ) {
     for link in obj.get_forward_links().chain(obj.get_back_links()) {
         let mut found = false;
         for visited in &mut *visited {
             // Do not visit a vertex twice
-            if Rc::ptr_eq(&link, visited) {
+            if Rc::ptr_eq(&link.1, visited) {
                 found = true;
                 break;
             }
@@ -277,7 +286,7 @@ pub(crate) fn link_visit<M: ExtraDataTrait>(
             continue;
         }
         // If not visited already
-        visited.push(link.clone());
-        to_visit.push(link.clone());
+        visited.push(link.1.clone());
+        to_visit.push(link.1.clone());
     }
 }

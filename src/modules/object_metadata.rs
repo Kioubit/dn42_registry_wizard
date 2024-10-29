@@ -1,4 +1,4 @@
-use crate::modules::object_reader::registry_objects_to_iter;
+use crate::modules::object_reader::{registry_objects_to_iter, RegistryObjectIterator, SimpleObjectLine};
 use crate::modules::util::BoxResult;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -9,7 +9,7 @@ pub fn output(registry_root: &Path, object_type: &str,
 ) -> BoxResult<String> {
     let sub_path = PathBuf::from("data/").join(Path::new(object_type));
     let mut objects = HashMap::new();
-    let mut registry = registry_objects_to_iter(registry_root, &sub_path)?;
+    let mut registry: RegistryObjectIterator<SimpleObjectLine> = registry_objects_to_iter(registry_root, &sub_path)?;
     if let Some(exclusive_fields) = exclusive_fields {
         registry.add_exclusive_fields(exclusive_fields);
     }

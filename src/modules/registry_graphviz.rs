@@ -3,7 +3,7 @@ use crate::modules::util::BoxResult;
 use std::borrow::Cow;
 use std::rc::Rc;
 
-type Nd = Rc::<LinkedRegistryObject<()>>;
+type Nd = Rc::<LinkedRegistryObject<(), String>>;
 type Ed = (Nd, Nd);
 struct Graph {
     nodes: Vec<Nd>,
@@ -23,7 +23,7 @@ impl<'a> dot::GraphWalk<'a, Nd, Ed > for Graph {
             for link in links {
                 let mut found = false;
                 for item in self.nodes().iter() {
-                    if Rc::ptr_eq(item, &link) {
+                    if Rc::ptr_eq(item, &link.1) {
                         found = true;
                         break;
                     }
@@ -31,7 +31,7 @@ impl<'a> dot::GraphWalk<'a, Nd, Ed > for Graph {
                 if !found {
                     continue;
                 }
-                edges.push((node.clone(), link));
+                edges.push((node.clone(), link.1));
             }
         }
         Cow::Owned(edges)

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use cidr_utils::cidr::IpCidr;
 use serde::{Serialize};
-use crate::modules::object_reader::read_registry_objects;
+use crate::modules::object_reader::{read_registry_objects, RegistryObject, SimpleObjectLine};
 use crate::modules::util;
 
 type PrefixTree = Rc<RefCell<HierarchicalPrefix>>;
@@ -33,7 +33,7 @@ pub fn output(registry_root: &Path, v4: bool) -> util::BoxResult<String> {
     };
 
 
-    let objects = read_registry_objects(registry_root, inetnum_path, true)?;
+    let objects: Vec<RegistryObject<SimpleObjectLine>> = read_registry_objects(registry_root, inetnum_path, true)?;
     let mut cidr_list: Vec<PrefixTree> = Vec::new();
     for object in objects {
         let inetnum = object.filename.replace('_', "/");

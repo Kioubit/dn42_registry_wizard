@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::cell::Cell;
 use std::path::Path;
 use std::rc::Rc;
-
+use crate::modules::object_reader::SimpleObjectLine;
 
 #[derive(Debug, Serialize, Default)]
 struct MetaData {
@@ -37,8 +37,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
     let raw_list = get_item_list(data_input)?;
 
     let mut output = String::new();
-    let registry_schema = parse_registry_schema(registry_root)?;
-    let graph = create_registry_graph::<MetaData>(registry_root, &registry_schema)?;
+    let registry_schema = parse_registry_schema(registry_root, true)?;
+    let graph = create_registry_graph::<MetaData, SimpleObjectLine>(registry_root, &registry_schema, false)?;
 
     let removal_list: Vec<String>;
     let affected_graph;
@@ -83,8 +83,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             continue;
         }
         // Recursively follow each path while keeping track of visited vertices
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
         visited.push(t.clone());
         to_visit.push(t.clone());
 
@@ -126,8 +126,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         if !t.extra.marked.get() {
             continue;
         }
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
         visited.push(t.clone());
         to_visit.push(t.clone());
 
@@ -160,7 +160,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             let mut found = false;
             for reference in w_item.get_back_links()
                 .chain(w_item.get_forward_links()) {
-                if reference.extra.deleted.get() {
+                if reference.1.extra.deleted.get() {
                     continue;
                 }
                 found = true;
@@ -183,11 +183,11 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         let mut has_links = false;
         for link in item.get_back_links()
             .chain(item.get_forward_links()) {
-            if !link.extra.deleted.get() {
+            if !link.1.extra.deleted.get() {
                 has_links = true;
                 continue;
             }
-            output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.object.filename, item.category, item.object.filename));
+            output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.1.object.filename, item.category, item.object.filename));
         }
 
         if !has_links {
@@ -211,8 +211,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             continue;
         }
         let required_categories = applicable_schema.unwrap()
-            .lookup_keys.iter()
-            .filter(|x| x.required)
+            .keys.iter()
+            .filter(|x| x.required && !x.lookup_targets.is_empty())
             .flat_map(|x| x.lookup_targets.iter())
             .collect::<Vec<_>>();
         let mut required_category_missing = false;
@@ -222,8 +222,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
                 continue;
             }
             if !item.get_forward_links()
-                .filter(|x| !x.extra.deleted.get())
-                .any(|x| x.category == *required_category) {
+                .filter(|x| !x.1.extra.deleted.get())
+                .any(|x| x.1.category == *required_category) {
                 // If we don't find a link with the required category
                 required_category_missing = true;
                 break;
@@ -249,8 +249,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
 
         let mut graph_has_asn = false;
 
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
         visited.push(item.clone());
         to_visit.push(item.clone());
 
