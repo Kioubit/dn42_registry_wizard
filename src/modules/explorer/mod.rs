@@ -4,16 +4,15 @@ use axum::Router;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use tokio::select;
-use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::channel;
+use crate::modules::explorer::os_signals::signal_listener;
 use crate::modules::explorer::state::AppState;
 
 mod static_files;
 mod handlers;
 mod state;
-
+mod os_signals;
 
 #[derive(Debug, Clone)]
 enum CustomSignal {
@@ -85,47 +84,3 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
         }
     }).await.unwrap();
 }
-
-
-async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) {
-    if let Ok(mut user1_signal) = signal(SignalKind::user_defined1()) {
-        loop {
-            select! {
-                _ = user1_signal.recv() => {
-                    sig_chan_tx.send(CustomSignal::DataUpdate).unwrap();
-                }
-                _ = terminate_signal() => {
-                    sig_chan_tx.send(CustomSignal::Shutdown).unwrap();
-                    break;
-                }
-            }
-        }
-    } else {
-        eprintln!("Error registering user_defined1 signal");
-        select! {
-            _ = terminate_signal() => {
-                sig_chan_tx.send(CustomSignal::Shutdown).unwrap();
-            }
-        }
-    }
-}
-
-#[cfg(unix)]
-async fn terminate_signal() {
-    use tokio::signal::unix::{signal, SignalKind};
-    let mut sigterm = signal(SignalKind::terminate()).unwrap();
-    let mut sigint = signal(SignalKind::interrupt()).unwrap();
-    select! {
-        _ = sigterm.recv() => (),
-        _ = sigint.recv() => ()
-    }
-}
-
-#[cfg(windows)]
-async fn terminate_signal() {
-    use tokio::signal::windows::ctrl_c;
-    let mut ctrl_c = ctrl_c().unwrap();
-    let _ = ctrl_c.recv().await;
-}
-
-
