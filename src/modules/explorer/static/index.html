@@ -16,14 +16,17 @@
         #mainTable {
             & thead {
                 text-align: left;
+
                 & th {
                     vertical-align: bottom;
                     border-bottom: 2px solid #073648;
                 }
+
                 & tr th {
                     font-weight: lighter;
                 }
             }
+
             & {
                 display: block;
                 overflow-x: auto;
@@ -81,13 +84,17 @@
             min-width: 10em;
         }
 
-        @media only screen and (max-width:900px) {
+        @media only screen and (max-width: 900px) {
             #title {
                 order: 0 !important;
             }
         }
+
         #title {
             order: 1;
+            display: flex;
+            align-items: center;
+            gap: 1em;
         }
 
         #statDisplay {
@@ -121,15 +128,33 @@
         .word-break-all {
             word-break: break-all;
         }
+
         .mt-3 {
             margin-top: 3em;
+        }
+
+        #explorerBranding {
+            margin-top: 3em;
+            font-size: smaller;
+            text-align: right;
+        }
+
+        #dn42Logo {
+            height: 1.9em;
+        }
+
+        #logoTitle {
+            display: inline-block;
         }
     </style>
 </head>
 <body>
 <div>
     <div id="titleBar">
-        <h1 id="title">Registry explorer</h1>
+        <div id="title">
+            <img src="dn42.svg" id="dn42Logo" alt="dn42 logo">
+            <h2 id="logoTitle">Registry explorer</h2>
+        </div>
         <div id="searchBoxOuter">
             <input id="searchBox" type="search" placeholder="Search here...">
         </div>
@@ -161,6 +186,7 @@
 <div id="statDisplay" class="noDisplay">
     <h3>Object statistics</h3>
     <div id="statDisplayInner"></div>
+    <div id="explorerBranding">Explorer powered by dn42_registry_wizard</div>
 </div>
 </body>
 <script src="explorer.js"></script>

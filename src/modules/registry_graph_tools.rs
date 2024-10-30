@@ -1,4 +1,4 @@
-use crate::modules::registry_graph::{create_registry_graph, link_visit, parse_registry_schema, ExtraDataTrait, LinkedRegistryObject, WEAKLY_REFERENCING};
+use crate::modules::registry_graph::{create_registry_graph, link_visit, parse_registry_schema, ExtraDataTrait, LinkInfoNone, LinkInfoSchemaKey, LinkedRegistryObject, WEAKLY_REFERENCING};
 use crate::modules::registry_graphviz::create_graphviz;
 use crate::modules::util::BoxResult;
 use serde::Serialize;
@@ -9,7 +9,7 @@ use crate::modules::object_reader::SimpleObjectLine;
 
 pub fn output_list(registry_root: &Path, obj_type: Option<String>, object_name: Option<String>, graphviz: bool) -> BoxResult<String> {
     let registry_schema = parse_registry_schema(registry_root, true)?;
-    let graph = create_registry_graph::<(), SimpleObjectLine>(registry_root, &registry_schema, false)?;
+    let graph = create_registry_graph(registry_root, &registry_schema, false)?;
     match obj_type {
         None => {
             if graphviz {
@@ -49,13 +49,13 @@ pub fn output_related(registry_root: &Path, obj_type: String,
                       graphviz: bool,
 ) -> BoxResult<String> {
     let schema = parse_registry_schema(registry_root, true)?;
-    let graph = create_registry_graph::<(), SimpleObjectLine>(registry_root, &schema, false)?;
+    let graph = create_registry_graph::<(), SimpleObjectLine, LinkInfoSchemaKey>(registry_root, &schema, false)?;
     let t_obj = graph.get(&obj_type).ok_or("specified object type not found")?
         .iter().find(|x| x.object.filename == obj_name)
         .ok_or("specified obj_name not found")?;
 
-    let mut visited: Vec<Rc<LinkedRegistryObject<(), SimpleObjectLine>>> = Vec::new();
-    let mut to_visit: Vec<Rc<LinkedRegistryObject<(), SimpleObjectLine>>> = Vec::new();
+    let mut visited: Vec<Rc<LinkedRegistryObject<(), SimpleObjectLine, LinkInfoSchemaKey>>> = Vec::new();
+    let mut to_visit: Vec<Rc<LinkedRegistryObject<(), SimpleObjectLine, LinkInfoSchemaKey>>> = Vec::new();
     visited.push(t_obj.clone());
     to_visit.push(t_obj.clone());
     while let Some(obj) = to_visit.pop() {
@@ -103,11 +103,11 @@ pub fn output_related(registry_root: &Path, obj_type: String,
 pub fn output_path(registry_root: &Path, src_type: String, tgt_type: String,
                    src_name: String, tgt_name: String) -> BoxResult<String> {
     #[derive(Default, Debug, Serialize)]
-    struct ParentInfo(RefCell<Option<Rc<LinkedRegistryObject<ParentInfo, SimpleObjectLine>>>>);
+    struct ParentInfo(RefCell<Option<Rc<LinkedRegistryObject<ParentInfo, SimpleObjectLine, LinkInfoNone>>>>);
     impl ExtraDataTrait for ParentInfo {}
 
     let schema = parse_registry_schema(registry_root, true)?;
-    let graph = create_registry_graph::<ParentInfo, String>(registry_root, &schema, false)?;
+    let graph = create_registry_graph(registry_root, &schema, false)?;
     let s_obj = graph.get(&src_type)
         .ok_or("specified src object type not found")?
         .iter().find(|x| x.object.filename == src_name)
@@ -118,8 +118,8 @@ pub fn output_path(registry_root: &Path, src_type: String, tgt_type: String,
         .ok_or("specified tgt_name not found")?;
 
     // Perform a breadth-first search
-    let mut visited: Vec<Rc<LinkedRegistryObject<ParentInfo,SimpleObjectLine>>> = Vec::new();
-    let mut to_visit: Vec<Rc<LinkedRegistryObject<ParentInfo, SimpleObjectLine>>> = Vec::new();
+    let mut visited: Vec<Rc<LinkedRegistryObject<ParentInfo,SimpleObjectLine, LinkInfoNone>>> = Vec::new();
+    let mut to_visit: Vec<Rc<LinkedRegistryObject<ParentInfo, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
     visited.push(s_obj.clone());
     to_visit.push(s_obj.clone());
     let mut found = false;

@@ -1,9 +1,10 @@
-use crate::modules::registry_graph::LinkedRegistryObject;
+use crate::modules::registry_graph::{LinkInfoSchemaKey, LinkedRegistryObject};
 use crate::modules::util::BoxResult;
 use std::borrow::Cow;
 use std::rc::Rc;
+use crate::modules::object_reader::SimpleObjectLine;
 
-type Nd = Rc::<LinkedRegistryObject<(), String>>;
+type Nd = Rc<LinkedRegistryObject<(), SimpleObjectLine, LinkInfoSchemaKey>>;
 type Ed = (Nd, Nd);
 struct Graph {
     nodes: Vec<Nd>,

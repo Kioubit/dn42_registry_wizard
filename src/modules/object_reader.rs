@@ -10,12 +10,10 @@ use std::path::{Path, PathBuf};
 
 
 pub(in crate::modules) trait ObjectLine : Debug + Serialize + Clone {
-    type Output;
-
-    fn append_to_last(key: &mut Vec<Self::Output>, value: &str);
-    fn push_line(key :&mut Vec<Self::Output>, value: String, line: usize);
+    fn append_to_last(key: &mut Vec<Self>, value: &str);
+    fn push_line(key :&mut Vec<Self>, value: String, line: usize);
     
-    fn get_value(&self) -> String;
+    fn get_line_value(&self) -> String;
 }
 
 pub(in crate::modules) type OrderedObjectLine = (usize, String);
@@ -28,7 +26,7 @@ pub(in crate::modules) struct RegistryObject<T> where T: ObjectLine {
 }
 
 pub(in crate::modules) struct RegistryObjectIterator<T: ObjectLine> {
-    phantom: PhantomData<T>,
+    _marker: PhantomData<T>,
     paths: Vec<(String, PathBuf)>,
     filename_filter: Vec<String>,
     exclusive_fields: RefCell<Option<Vec<String>>>,
@@ -55,7 +53,7 @@ impl<T: ObjectLine> RegistryObjectIterator<T> {
     }
 }
 
-impl<T: ObjectLine<Output=T>> Iterator for RegistryObjectIterator<T> {
+impl<T: ObjectLine> Iterator for RegistryObjectIterator<T> {
     type Item = BoxResult<RegistryObject<T>>;
     fn next(&mut self) -> Option<Self::Item> {
         let mut path: (String, PathBuf);
@@ -92,7 +90,7 @@ impl<T: ObjectLine<Output=T>> Iterator for RegistryObjectIterator<T> {
 pub(in crate::modules) fn registry_objects_to_iter<T: ObjectLine>(registry_root: &Path, sub_path: &Path) -> BoxResult<RegistryObjectIterator<T>> {
     let paths = get_object_paths(registry_root, sub_path)?;
     Ok(RegistryObjectIterator {
-        phantom: Default::default(),
+        _marker: Default::default(),
         paths,
         filename_filter: vec![],
         exclusive_fields: RefCell::new(None),
@@ -117,7 +115,7 @@ fn get_object_paths(registry_root: &Path, sub_path: &Path) -> BoxResult<Vec<(Str
     Ok(paths)
 }
 
-pub(in crate::modules) fn read_registry_objects<T: ObjectLine<Output = T>>(registry_root: &Path, sub_path: &Path, enumerate_only: bool) -> BoxResult<Vec<RegistryObject<T>>> {
+pub(in crate::modules) fn read_registry_objects<T: ObjectLine>(registry_root: &Path, sub_path: &Path, enumerate_only: bool) -> BoxResult<Vec<RegistryObject<T>>> {
     let paths = get_object_paths(registry_root, sub_path)?;
 
     let mut objects = Vec::<RegistryObject<T>>::new();
@@ -138,45 +136,41 @@ pub(in crate::modules) fn read_registry_objects<T: ObjectLine<Output = T>>(regis
     Ok(objects)
 }
 
-pub(in crate::modules) fn read_registry_object_kv<T: ObjectLine<Output = T>>(path: &Path) -> BoxResult<HashMap<String, Vec<T>>> {
+pub(in crate::modules) fn read_registry_object_kv<T: ObjectLine>(path: &Path) -> BoxResult<HashMap<String, Vec<T>>> {
     read_registry_object_kv_filtered(path, &None, &None)
 }
 
 impl ObjectLine for SimpleObjectLine {
-    type Output = SimpleObjectLine;
-
-    fn append_to_last(key: &mut Vec<Self::Output>, value: &str) {
+    fn append_to_last(key: &mut Vec<Self>, value: &str) {
         key.last_mut().unwrap().push_str(value)
     }
 
-    fn push_line(key: &mut Vec<Self::Output>, value: String, _: usize) {
+    fn push_line(key: &mut Vec<Self>, value: String, _: usize) {
         key.push(value)
     }
-    fn get_value(&self) -> String {
+    fn get_line_value(&self) -> String {
         self.clone()
     }
 }
 
 impl ObjectLine for OrderedObjectLine {
-    type Output = OrderedObjectLine;
-
-    fn append_to_last(key: &mut Vec<Self::Output>, value: &str) {
+    fn append_to_last(key: &mut Vec<Self>, value: &str) {
         let last = key.last_mut().unwrap();
         last.1.push_str(value);
     }
 
-    fn push_line(key: &mut Vec<Self::Output>, value: String, line: usize) {
+    fn push_line(key: &mut Vec<Self>, value: String, line: usize) {
         key.push((line, value))
     }
-    fn get_value(&self) -> String {
+    fn get_line_value(&self) -> String {
         self.1.clone()
     }
 }
 
 
-pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine<Output=T>>(path: &Path, exclusive_fields: &Option<Vec<String>>,
-                                         filtered_fields: &Option<Vec<String>>)
-                                         -> BoxResult<HashMap<String, Vec<T>>> {
+pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: &Path, exclusive_fields: &Option<Vec<String>>,
+                                                                                      filtered_fields: &Option<Vec<String>>)
+                                                                                      -> BoxResult<HashMap<String, Vec<T>>> {
     let mut map: HashMap<String, Vec<T>> = HashMap::new();
     let lines = util::read_lines(path)?;
     let mut last_obj_key : Option<String> = None;
@@ -204,19 +198,14 @@ pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine<Output=
                 map.insert(obj_key.to_string(), Vec::new());
             }
             let key = map.get_mut(obj_key).unwrap();
-            //key.push(result.1.trim().to_string());
             T::push_line(key, result.1.trim().to_string(), no);
             last_obj_key = Some(obj_key.to_string());
         } else if let Some(ref last_obj_key) = last_obj_key {
             // Handle multi-line
             let key = map.get_mut(last_obj_key).unwrap();
             if line.starts_with('+') {
-                //key.last_mut().unwrap().push_str("\n\n");
                 T::append_to_last(key, "\n\n");
-            } else {
-                //key.last_mut().unwrap().push('\n');
-                //key.last_mut().unwrap().push_str(line.trim());
-                T::append_to_last(key, "\n");
+            } else { T::append_to_last(key, "\n");
                 T::append_to_last(key, line.trim());
             }
         }

@@ -1,4 +1,4 @@
-use crate::modules::registry_graph::{create_registry_graph, link_visit, parse_registry_schema, ExtraDataTrait, LinkedRegistryObject, WEAKLY_REFERENCING};
+use crate::modules::registry_graph::{create_registry_graph, link_visit, parse_registry_schema, ExtraDataTrait, LinkInfoNone, LinkedRegistryObject, WEAKLY_REFERENCING};
 use crate::modules::util::{get_item_list, BoxResult, EitherOr};
 use serde::Serialize;
 use std::cell::Cell;
@@ -38,7 +38,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
 
     let mut output = String::new();
     let registry_schema = parse_registry_schema(registry_root, true)?;
-    let graph = create_registry_graph::<MetaData, SimpleObjectLine>(registry_root, &registry_schema, false)?;
+    let graph = create_registry_graph::<MetaData, SimpleObjectLine, LinkInfoNone>(registry_root, &registry_schema, false)?;
 
     let removal_list: Vec<String>;
     let affected_graph;
@@ -83,8 +83,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             continue;
         }
         // Recursively follow each path while keeping track of visited vertices
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
         visited.push(t.clone());
         to_visit.push(t.clone());
 
@@ -126,8 +126,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         if !t.extra.marked.get() {
             continue;
         }
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine,LinkInfoNone>>> = Vec::new();
         visited.push(t.clone());
         to_visit.push(t.clone());
 
@@ -249,8 +249,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
 
         let mut graph_has_asn = false;
 
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
         visited.push(item.clone());
         to_visit.push(item.clone());
 
