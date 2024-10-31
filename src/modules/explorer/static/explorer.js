@@ -27,6 +27,7 @@ async function fetch_index() {
 
 async function perform_search(query) {
     if (query.length < 2) {
+        expectedWindowHash = "";
         window.location.hash = "";
         set_page_state("main");
         return;
@@ -369,7 +370,7 @@ let expectedWindowHash = "";
 async function handle_window_hash() {
     let target = window.location.hash.substring(1);
     target = decodeURI(target);
-    if (target === expectedWindowHash || target === "") {
+    if (target === expectedWindowHash) {
         return;
     }
     if (target.startsWith("?")) {
@@ -377,6 +378,11 @@ async function handle_window_hash() {
         searchBox.value = target;
         await perform_search(target);
     } else {
+        if (target === "") {
+            searchBox.value = "";
+            set_page_state("main");
+            return;
+        }
         await navigate_to_window_hash(target);
     }
 }
