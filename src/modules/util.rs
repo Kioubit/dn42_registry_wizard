@@ -4,6 +4,7 @@ use std::{fs, io};
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::SystemTime;
 
 pub type BoxResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -75,4 +76,12 @@ pub(crate) fn get_last_git_activity(registry_root: &Path, path: &Path) -> BoxRes
         None => output.as_str()
     };
     Ok(output_clean.parse::<u64>()?)
+}
+
+pub(crate) fn get_current_unix_time() -> u64 {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    since_the_epoch.as_secs()
 }

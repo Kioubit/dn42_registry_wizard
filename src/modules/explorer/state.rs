@@ -4,13 +4,14 @@ use std::sync::{Arc, RwLock};
 use serde::Serialize;
 use crate::modules::object_reader::{OrderedObjectLine, RegistryObject};
 use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkInfoLineNumberOnly, RegistryGraph};
-use crate::modules::util::BoxResult;
+use crate::modules::util::{get_current_unix_time, BoxResult};
 
 
 #[derive(Default)]
 pub(super) struct AppState {
     pub objects: HashMap<String, Vec<WebRegistryObject>>,
     pub index: HashMap<String, Vec<String>>,
+    pub etag: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,7 +48,10 @@ pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<
         graph_web.insert(c.clone(), list);
     }
 
-    app_state.write().unwrap().objects = graph_web;
-    app_state.write().unwrap().index = index_map;
+
+    let mut app_state_lock = app_state.write().unwrap();
+    app_state_lock.objects = graph_web;
+    app_state_lock.index = index_map;
+    app_state_lock.etag = get_current_unix_time().to_string();
     Ok(())
 }

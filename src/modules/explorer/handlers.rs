@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use axum::extract::{Query, State};
-use axum::http::{StatusCode, Uri};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use crate::modules::explorer::{static_files, AppState};
 
@@ -13,14 +13,37 @@ pub(super) async fn root_handler(uri: Uri) -> impl IntoResponse {
     static_files::StaticFile(path)
 }
 
-pub(super) async fn index_handler(State(u): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
+pub(super) async fn index_handler(request_headers: HeaderMap, State(u): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
+    let client_etag = request_headers.get("if-none-match")
+        .and_then(|v| v.to_str().ok()).unwrap_or_default();
     let u = u.read().unwrap();
+    let etag = u.etag.clone();
+    if etag == client_etag {
+        return (StatusCode::NOT_MODIFIED, "Not Modified").into_response();
+    }
     let r = serde_json::to_string(&u.index);
-    r.unwrap()
+    drop(u);
+
+    if r.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+    }
+    let mut headers = HeaderMap::new();
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    headers.insert("Cache-Control", HeaderValue::from_static("max-age=3600, public, must-revalidate"));
+    headers.insert("ETag", HeaderValue::from_str(&etag).unwrap());
+
+
+    if let Ok(r) = r {
+        (headers, r).into_response()
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+    }
 }
 
-pub(super) async fn get_object(Query(params): Query<HashMap<String, String>>, State(u): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
-    let u = u.read().unwrap();
+pub(super) async fn get_object(request_headers: HeaderMap, Query(params): Query<HashMap<String, String>>, State(u): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
+    let client_etag = request_headers.get("if-none-match")
+        .and_then(|v| v.to_str().ok()).unwrap_or_default();
+
     let object_name = params.get("name");
     let object_type = params.get("type");
     if object_name.is_none() || object_type.is_none() {
@@ -28,6 +51,12 @@ pub(super) async fn get_object(Query(params): Query<HashMap<String, String>>, St
     }
     let object_name = object_name.unwrap();
     let object_type = object_type.unwrap();
+
+    let u = u.read().unwrap();
+    let etag = u.etag.clone();
+    if etag == client_etag {
+        return (StatusCode::NOT_MODIFIED, "Not Modified").into_response();
+    }
 
     let category_map = u.objects.get(object_type);
     if category_map.is_none() {
@@ -41,5 +70,10 @@ pub(super) async fn get_object(Query(params): Query<HashMap<String, String>>, St
     if js.is_err() {
         return (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response();
     }
-    js.unwrap().into_response()
+    let mut headers = HeaderMap::new();
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    headers.insert("Cache-Control", HeaderValue::from_static("max-age=1800, public, must-revalidate"));
+    headers.insert("ETag", HeaderValue::from_str(&etag).unwrap());
+
+    (headers, js.unwrap()).into_response()
 }
