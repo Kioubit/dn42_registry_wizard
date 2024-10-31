@@ -5,8 +5,9 @@ const waitDiv = document.getElementById('waitDiv');
 const backLinkDisplay = document.getElementById('backLinkDisplay');
 const searchDisplayDiv = document.getElementById('searchDisplayDiv');
 const searchBox = document.getElementById('searchBox');
-const statDisplay = document.getElementById('statDisplay');
+const statDisplayDiv = document.getElementById('statDisplayDiv');
 const statDisplayInner = document.getElementById('statDisplayInner');
+const errorDisplayDiv = document.getElementById('errorDisplayDiv');
 
 let index = null;
 
@@ -15,58 +16,30 @@ async function fetch_index() {
         return;
     }
     try {
-        let response = await fetch('http://127.0.0.1:8080/api/index/');
+        let response = await fetch('api/index/');
         index = await response.json();
     } catch (e) {
         console.log(e);
-        alert("Error fetching index");
+        errorDisplayDiv.innerText = "Error fetching index";
+        set_page_state("error");
     }
 }
-
-let expectedWindowHash = "";
-window.onpopstate = async () => {
-    const target = window.location.hash.substring(1);
-    if (target === expectedWindowHash) {
-        return;
-    }
-    if (target === "") {
-        expectedWindowHash = target;
-        await perform_search("");
-        return;
-    }
-    await navigate_to_window_hash(target);
-};
-
-async function navigate_to_window_hash(target) {
-    if (target.includes("/")) {
-        statDisplay.classList.add("noDisplay");
-        last_search_displayed = target;
-        const [a, b] = target.split("/");
-        await display_object(a, b);
-    } else {
-        await perform_search("");
-        searchBox.value = "";
-    }
-}
-
-
-let last_search_displayed = "";
 
 async function perform_search(query) {
-    waitDiv.classList.remove("noDisplay");
-    dataDisplayDiv.classList.add("noDisplay");
-    searchDisplayDiv.innerHTML = "";
-
-    await fetch_index();
-
     if (query.length < 2) {
         window.location.hash = "";
-        waitDiv.classList.add("noDisplay");
-        statDisplay.classList.remove("noDisplay");
+        set_page_state("main");
         return;
     }
-    searchDisplayDiv.classList.remove("noDisplay");
-    statDisplay.classList.add("noDisplay");
+
+    set_page_state("wait");
+    await fetch_index();
+
+    searchDisplayDiv.innerHTML = "";
+    set_page_state("search");
+
+    expectedWindowHash = "?" + query;
+    window.location.hash = "?" + query;
 
     let search_category = "";
     if (query.includes("/")) {
@@ -92,7 +65,7 @@ async function perform_search(query) {
             result_count++;
             last_category = result_category;
             last_result = result;
-            display_search_result(result_category, result);
+            append_search_result(result_category, result);
         }
         if (result_count === target_result_count) {
             // Hit result limit
@@ -122,29 +95,20 @@ async function perform_search(query) {
 
     next_target_results();
 
-    waitDiv.classList.add("noDisplay");
     if (result_count === 1) {
-        searchDisplayDiv.classList.add("noDisplay");
-        if ((last_category + "/" + last_result) === last_search_displayed) {
-            dataDisplayDiv.classList.remove("noDisplay");
-            return;
-        }
-        last_search_displayed = last_category + "/" + last_result;
         await display_object(last_category, last_result, true);
     } else if (result_count === 0) {
         searchDisplayDiv.innerText = "No results";
     }
 }
 
-function display_search_result(object_type, object_name) {
+function append_search_result(object_type, object_name) {
     const div = document.createElement("div");
     const elem = document.createElement("a");
-    elem.href = "#";
+    elem.href = `#${get_object_path(object_type, object_name)}`;
     elem.innerText = object_name;
     elem.onclick = async (ev) => {
         ev.preventDefault();
-        searchDisplayDiv.classList.add("noDisplay");
-        last_search_displayed = object_type + "/" + object_name;
         await display_object(object_type, object_name);
     };
     div.appendChild(elem);
@@ -170,10 +134,17 @@ function* filter_results(search_category, query) {
     }
 }
 
+let last_displayed_object = "";
 
 async function display_object(object_type, object_name, no_set_search) {
-    waitDiv.classList.remove("noDisplay");
-    dataDisplayDiv.classList.add("noDisplay");
+    const provided_obj_path = get_object_path(object_type, object_name);
+    expectedWindowHash = provided_obj_path;
+    window.location.hash = provided_obj_path;
+    if (last_displayed_object === provided_obj_path) {
+        set_page_state("object");
+        return;
+    }
+    set_page_state("wait");
     tableBody.innerHTML = "";
     backLinkDisplay.innerHTML = "";
     dataTitleDisplay.innerText = "";
@@ -182,22 +153,22 @@ async function display_object(object_type, object_name, no_set_search) {
     params.set("type", object_type);
     let response = null;
     try {
-        response = await (await fetch('http://127.0.0.1:8080/api/object/?' + params.toString())).json();
+        response = await (await fetch('api/object/?' + params.toString())).json();
     } catch (e) {
         console.log(e);
-        waitDiv.classList.add("noDisplay");
-        alert("Error fetching object");
+        set_page_state("error");
+        errorDisplayDiv.innerText = "Error fetching object";
         return;
     }
-    const name = response["category"] + "/" + response["object"]["filename"];
+    last_displayed_object = provided_obj_path;
 
-    expectedWindowHash = name;
-    window.location.hash = name;
+    const name = get_object_path(response["category"], response["object"]["filename"]);
 
     if (no_set_search !== true) {
         searchBox.value = name;
     }
     dataTitleDisplay.innerText = name;
+    dataTitleDisplay.href = `#${name}`
     dataTitleDisplay.onclick = (ev) => {
         ev.preventDefault();
         searchBox.value = name;
@@ -217,7 +188,6 @@ async function display_object(object_type, object_name, no_set_search) {
         tdElemKey.innerText = key;
         let found_link = false;
         const line_no = entry.value[0];
-        console.log(line_no, entry);
         for (const link of forward_links) {
             const [link_line_no, link_target] = link;
             if (line_no !== link_line_no) {
@@ -226,14 +196,15 @@ async function display_object(object_type, object_name, no_set_search) {
             found_link = true;
             let [a, b] = link_target.split("/");
             const link_elem = document.createElement("a");
-            link_elem.href = "#";
             if (a === object_type && b === object_name) {
                 // link to self
+                link_elem.href = "#";
                 link_elem.style.color = "grey";
                 link_elem.onclick = (ev) => {
                     ev.preventDefault();
                 };
             } else {
+                link_elem.href = `#${get_object_path(a, b)}`;
                 link_elem.onclick = (ev) => {
                     ev.preventDefault();
                     display_object(a, b);
@@ -270,7 +241,7 @@ async function display_object(object_type, object_name, no_set_search) {
             const tr = document.createElement("tr");
             const td1 = document.createElement("td");
             const link_elem = document.createElement("a");
-            link_elem.href = "#";
+            link_elem.href = `#${get_object_path(back_link_category, back_link_name)}`;
             link_elem.onclick = (ev) => {
                 ev.preventDefault();
                 display_object(back_link_category, back_link_name);
@@ -314,8 +285,7 @@ async function display_object(object_type, object_name, no_set_search) {
     if (back_link_count === 0) {
         backLinkDisplay.innerText = "No references found";
     }
-    waitDiv.classList.add("noDisplay");
-    dataDisplayDiv.classList.remove("noDisplay");
+    set_page_state("object");
 }
 
 function* getBackLinks(back_links) {
@@ -324,17 +294,12 @@ function* getBackLinks(back_links) {
     }
 }
 
-(async function main() {
-    await get_stats();
-    await navigate_to_window_hash(window.location.hash.substring(1));
-}());
-
 async function get_stats() {
     await fetch_index();
     for (const category of Object.entries(index)) {
         const elem = document.createElement("div");
         const href = document.createElement("a");
-        href.href = "#";
+        href.href = `#?${category[0]}/`;
         href.innerText = category[0];
         href.onclick = (ev) => {
             ev.preventDefault();
@@ -347,8 +312,98 @@ async function get_stats() {
         elem.appendChild(span);
         statDisplayInner.appendChild(elem);
     }
-    statDisplay.classList.remove("noDisplay");
-    waitDiv.classList.add("noDisplay");
+    set_page_state("main");
+}
+
+function set_page_state(state) {
+    switch (state) {
+        case "main":
+            waitDiv.classList.add("noDisplay");
+            dataDisplayDiv.classList.add("noDisplay");
+            searchDisplayDiv.classList.add("noDisplay");
+            statDisplayDiv.classList.remove("noDisplay");
+            errorDisplayDiv.classList.add("noDisplay");
+            break;
+        case "search":
+            waitDiv.classList.add("noDisplay");
+            dataDisplayDiv.classList.add("noDisplay");
+            searchDisplayDiv.classList.remove("noDisplay");
+            statDisplayDiv.classList.add("noDisplay");
+            errorDisplayDiv.classList.add("noDisplay");
+            break;
+        case "object":
+            waitDiv.classList.add("noDisplay");
+            dataDisplayDiv.classList.remove("noDisplay");
+            searchDisplayDiv.classList.add("noDisplay");
+            statDisplayDiv.classList.add("noDisplay");
+            errorDisplayDiv.classList.add("noDisplay");
+            break;
+        case "wait":
+            waitDiv.classList.remove("noDisplay");
+            dataDisplayDiv.classList.add("noDisplay");
+            searchDisplayDiv.classList.add("noDisplay");
+            statDisplayDiv.classList.add("noDisplay");
+            errorDisplayDiv.classList.add("noDisplay");
+            break;
+        case "error":
+            waitDiv.classList.add("noDisplay");
+            dataDisplayDiv.classList.add("noDisplay");
+            searchDisplayDiv.classList.add("noDisplay");
+            statDisplayDiv.classList.add("noDisplay");
+            errorDisplayDiv.classList.remove("noDisplay");
+            break;
+    }
+}
+
+function get_object_path(object_type, object_name) {
+    return `${object_type}/${object_name}`;
+}
+
+
+window.onpopstate = async () => {
+    await handle_window_hash();
+};
+
+let expectedWindowHash = "";
+
+async function handle_window_hash() {
+    let target = window.location.hash.substring(1);
+    target = decodeURI(target);
+    if (target === expectedWindowHash || target === "") {
+        return;
+    }
+    if (target.startsWith("?")) {
+        target = target.substring(1);
+        searchBox.value = target;
+        await perform_search(target);
+    } else {
+        await navigate_to_window_hash(target);
+    }
+}
+
+async function navigate_to_window_hash(target) {
+    set_page_state("wait");
+    await fetch_index();
+    let [a, b] = target.split("/");
+    let found = false;
+    for (const category of Object.entries(index)) {
+        if (category[0] === a) {
+            for (const item of category[1]) {
+                if (item === b) {
+                    found = true;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    if (!found) {
+        errorDisplayDiv.innerText = "Object linked to was not found";
+        set_page_state("error");
+        return;
+    }
+    await display_object(a, b);
 }
 
 let searchTimeout = null;
@@ -360,3 +415,8 @@ searchBox.oninput = () => {
         perform_search(searchBox.value).then();
     }, 150);
 };
+
+(async function main() {
+    await get_stats();
+    await handle_window_hash();
+}());

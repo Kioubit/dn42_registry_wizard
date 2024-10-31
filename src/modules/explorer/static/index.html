@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Registry explorer</title>
+    <title>DN42 registry explorer</title>
     <style>
         body {
             overflow-y: scroll;
@@ -97,7 +97,7 @@
             gap: 1em;
         }
 
-        #statDisplay {
+        #statDisplayDiv {
             margin: 0 auto;
             max-width: 40em;
         }
@@ -146,13 +146,17 @@
         #logoTitle {
             display: inline-block;
         }
+
+        #errorDisplayDiv {
+            color: red;
+        }
     </style>
 </head>
 <body>
 <div>
     <div id="titleBar">
         <div id="title">
-            <img src="dn42.svg" id="dn42Logo" alt="dn42 logo">
+            <img src="dn42.svg" id="dn42Logo" alt="dn42 logo" title="dn42 network">
             <h2 id="logoTitle">Registry explorer</h2>
         </div>
         <div id="searchBoxOuter">
@@ -161,11 +165,12 @@
     </div>
 </div>
 <hr>
+<noscript>This page requires a browser supporting JavaScript to function.</noscript>
 <div id="waitDiv">
     Please wait...
 </div>
-<div id="searchDisplayDiv" class="noDisplay">
-</div>
+<div id="searchDisplayDiv" class="noDisplay"></div>
+<div id="errorDisplayDiv" class="noDisplay"></div>
 <div id="dataDisplayDiv" class="noDisplay">
     <h2 class="word-break-all"><a id="dataTitleDisplay" href="#"></a></h2>
     <table id="mainTable">
@@ -183,7 +188,7 @@
         <table id="backLinkDisplay"></table>
     </div>
 </div>
-<div id="statDisplay" class="noDisplay">
+<div id="statDisplayDiv" class="noDisplay">
     <h3>Object statistics</h3>
     <div id="statDisplayInner"></div>
     <div id="explorerBranding">Explorer powered by dn42_registry_wizard</div>
