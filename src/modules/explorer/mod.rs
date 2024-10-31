@@ -35,7 +35,7 @@ pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16) -> BoxResult<S
 
         let sig_chan_rx_2 = sig_chan_rx.resubscribe();
         let app_state_clone = app_state.clone();
-        let registry_data_updater = tokio::spawn(async move {
+        let registry_data_updater = tokio::spawn(async move  {
             loop {
                 match sig_chan_rx.recv().await.unwrap() {
                     CustomSignal::Shutdown => {
@@ -50,10 +50,15 @@ pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16) -> BoxResult<S
                     }
                 }
             }
+            Ok(())
         });
 
         let server = tokio::spawn(start_server(app_state_clone, port, sig_chan_rx_2));
-        let result = tokio::try_join!(registry_data_updater, server, signal_listener_handle);
+        let result = tokio::try_join!(
+            async {registry_data_updater.await?},
+            async {server.await?},
+            async {signal_listener_handle.await?}
+        );
         if let Err(e) = result {
             return Err(format!("Error: {}", e));
         }
@@ -64,9 +69,10 @@ pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16) -> BoxResult<S
 }
 
 
-async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_rx: broadcast::Receiver<CustomSignal>) {
+async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_rx: broadcast::Receiver<CustomSignal>) -> BoxResult<()> {
     let addr = SocketAddr::from((IpAddr::from(Ipv6Addr::UNSPECIFIED), port));
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await
+        .map_err(|x| format!("Error listening on TCP: {}", x))?;
     let app = Router::new()
         .route("/", get(handlers::root_handler))
         .route("/*path", get(handlers::root_handler))
@@ -74,7 +80,7 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
         .route("/api/object/", get(handlers::get_object))
         .with_state(app_state);
 
-    println!("Starting server on port {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update", port);
+    eprintln!("Starting server on port {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update", port);
     axum::serve(listener, app).with_graceful_shutdown(async move {
         loop {
             match sig_chan_rx.recv().await.unwrap() {
@@ -82,5 +88,7 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
                 CustomSignal::DataUpdate => {}
             }
         }
-    }).await.unwrap();
+    }).await
+        .map_err(|e| format!("Error starting server: {}", e))?;
+    Ok(())
 }

@@ -1,9 +1,10 @@
 use tokio::select;
 use tokio::sync::broadcast;
 use crate::modules::explorer::CustomSignal;
+use crate::modules::util::BoxResult;
 
 #[cfg(unix)]
-pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) {
+pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) -> BoxResult<()> {
     use tokio::signal::unix::{signal, SignalKind};
     if let Ok(mut user1_signal) = signal(SignalKind::user_defined1()) {
         loop {
@@ -25,6 +26,7 @@ pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>
             }
         }
     }
+    Ok(())
 }
 
 #[cfg(windows)]
