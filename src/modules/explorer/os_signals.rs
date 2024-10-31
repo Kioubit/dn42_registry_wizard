@@ -30,12 +30,13 @@ pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>
 }
 
 #[cfg(windows)]
-pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) {
+pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) -> BoxResult<()>{
     select! {
             _ = terminate_signal() => {
                 sig_chan_tx.send(CustomSignal::Shutdown).unwrap();
             }
     }
+    Ok(())
 }
 
 #[cfg(unix)]
