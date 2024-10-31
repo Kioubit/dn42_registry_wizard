@@ -1,10 +1,10 @@
-use crate::modules::registry_graph::{create_registry_graph, link_visit, parse_registry_schema, ExtraDataTrait, LinkInfoNone, LinkedRegistryObject, WEAKLY_REFERENCING};
+use crate::modules::object_reader::OrderedObjectLine;
+use crate::modules::registry_graph::{create_registry_graph, link_visit, parse_registry_schema, ExtraDataTrait, LinkInfoLineNumberOnly, LinkedRegistryObject, WEAKLY_REFERENCING};
 use crate::modules::util::{get_item_list, BoxResult, EitherOr};
 use serde::Serialize;
 use std::cell::Cell;
 use std::path::Path;
 use std::rc::Rc;
-use crate::modules::object_reader::SimpleObjectLine;
 
 #[derive(Debug, Serialize, Default)]
 struct MetaData {
@@ -38,7 +38,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
 
     let mut output = String::new();
     let registry_schema = parse_registry_schema(registry_root, true)?;
-    let graph = create_registry_graph::<MetaData, SimpleObjectLine, LinkInfoNone>(registry_root, &registry_schema, false)?;
+    let graph = create_registry_graph::<MetaData, OrderedObjectLine, LinkInfoLineNumberOnly>(registry_root, &registry_schema, true, false)?;
 
     let removal_list: Vec<String>;
     let affected_graph;
@@ -83,8 +83,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             continue;
         }
         // Recursively follow each path while keeping track of visited vertices
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, OrderedObjectLine, LinkInfoLineNumberOnly>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, OrderedObjectLine, LinkInfoLineNumberOnly>>> = Vec::new();
         visited.push(t.clone());
         to_visit.push(t.clone());
 
@@ -98,11 +98,11 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             }
 
             // If an *unmarked* mntner/aut-num vertex is encountered, unmark self and flag for manual review
-            let empty_vec : Vec<String> = Vec::with_capacity(0);
+            let empty_vec : Vec<OrderedObjectLine> = Vec::with_capacity(0);
             if !obj.extra.marked.get() && obj.category == removal_category.as_str() {
                 t.extra.marked.set(false);
                 let t_mnt = t.object.key_value.get("mnt-by").unwrap_or(&empty_vec);
-                if !t_mnt.contains(&String::from("DN42-MNT")) || only_one_removal_item {
+                if !t_mnt.iter().map(|x| &x.1).collect::<Vec<_>>().contains(&&String::from("DN42-MNT")) || only_one_removal_item {
                     eprintln!("Manual review: {} - {:?} (First conflict with active object: {} - {:?})",
                               t.object.filename, t_mnt,
                               obj.object.filename, obj.object.key_value.get("mnt-by").unwrap_or(&empty_vec)
@@ -126,8 +126,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         if !t.extra.marked.get() {
             continue;
         }
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine,LinkInfoNone>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, OrderedObjectLine, LinkInfoLineNumberOnly>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, OrderedObjectLine, LinkInfoLineNumberOnly>>> = Vec::new();
         visited.push(t.clone());
         to_visit.push(t.clone());
 
@@ -181,13 +181,22 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         }
 
         let mut has_links = false;
-        for link in item.get_back_links()
-            .chain(item.get_forward_links()) {
+        for link in item.get_forward_links() {
             if !link.1.extra.deleted.get() {
                 has_links = true;
                 continue;
             }
-            output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.1.object.filename, item.category, item.object.filename));
+            //output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.1.object.filename, item.category, item.object.filename));
+            // Deletion based on line number of link
+            output.push_str(&format!("sed '{}d' 'data/{}/{}'\n", link.0 +1, item.category, item.object.filename));
+        }
+        if !has_links {
+            for link in item.get_back_links() {
+                if !link.1.extra.deleted.get() {
+                    has_links = true;
+                    break;
+                }
+            }
         }
 
         if !has_links {
@@ -249,8 +258,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
 
         let mut graph_has_asn = false;
 
-        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
-        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, SimpleObjectLine, LinkInfoNone>>> = Vec::new();
+        let mut visited: Vec<Rc<LinkedRegistryObject<MetaData, OrderedObjectLine, LinkInfoLineNumberOnly>>> = Vec::new();
+        let mut to_visit: Vec<Rc<LinkedRegistryObject<MetaData, OrderedObjectLine, LinkInfoLineNumberOnly>>> = Vec::new();
         visited.push(item.clone());
         to_visit.push(item.clone());
 
@@ -264,7 +273,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             }
             
             if let Some(m) =  obj.object.key_value.get("mnt-by") {
-                if m.iter().any(|m| m == "DN42-MNT") {
+                if m.iter().any(|m| m.1 == "DN42-MNT") {
                     // Skip sub-graphs containing DN42-MNT
                     graph_has_asn = true;
                     break;

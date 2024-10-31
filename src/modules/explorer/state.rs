@@ -24,7 +24,7 @@ pub(super) struct WebRegistryObject {
 
 pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<RwLock<AppState>>) -> BoxResult<()> {
     let schema = parse_registry_schema(registry_root.as_ref(), false)?;
-    let graph: RegistryGraph<(), OrderedObjectLine, LinkInfoLineNumberOnly> = create_registry_graph(registry_root.as_ref(), &schema, true)?;
+    let graph: RegistryGraph<(), OrderedObjectLine, LinkInfoLineNumberOnly> = create_registry_graph(registry_root.as_ref(), &schema, true, true)?;
 
     let mut graph_web = HashMap::with_capacity(graph.capacity());
     let mut index_map: HashMap<String, Vec<String>> = HashMap::with_capacity(graph.capacity());

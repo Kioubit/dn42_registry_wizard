@@ -15,7 +15,7 @@ async function fetch_index() {
         return;
     }
     try {
-        let response = await fetch('api/index/');
+        let response = await fetch('http://127.0.0.1:8080/api/index/');
         index = await response.json();
     } catch (e) {
         console.log(e);
@@ -182,7 +182,7 @@ async function display_object(object_type, object_name, no_set_search) {
     params.set("type", object_type);
     let response = null;
     try {
-        response = await (await fetch('api/object/?' + params.toString())).json();
+        response = await (await fetch('http://127.0.0.1:8080/api/object/?' + params.toString())).json();
     } catch (e) {
         console.log(e);
         waitDiv.classList.add("noDisplay");
@@ -227,10 +227,18 @@ async function display_object(object_type, object_name, no_set_search) {
             let [a, b] = link_target.split("/");
             const link_elem = document.createElement("a");
             link_elem.href = "#";
-            link_elem.onclick = (ev) => {
-                ev.preventDefault();
-                display_object(a, b);
-            };
+            if (a === object_type && b === object_name) {
+                // link to self
+                link_elem.style.color = "grey";
+                link_elem.onclick = (ev) => {
+                    ev.preventDefault();
+                };
+            } else {
+                link_elem.onclick = (ev) => {
+                    ev.preventDefault();
+                    display_object(a, b);
+                };
+            }
             link_elem.innerText = value;
             tdElemValue.appendChild(link_elem);
             const badge = document.createElement("span");

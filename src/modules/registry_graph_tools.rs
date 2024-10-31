@@ -9,7 +9,7 @@ use crate::modules::object_reader::SimpleObjectLine;
 
 pub fn output_list(registry_root: &Path, obj_type: Option<String>, object_name: Option<String>, graphviz: bool) -> BoxResult<String> {
     let registry_schema = parse_registry_schema(registry_root, true)?;
-    let graph = create_registry_graph(registry_root, &registry_schema, false)?;
+    let graph = create_registry_graph(registry_root, &registry_schema, false,false)?;
     match obj_type {
         None => {
             if graphviz {
@@ -49,7 +49,7 @@ pub fn output_related(registry_root: &Path, obj_type: String,
                       graphviz: bool,
 ) -> BoxResult<String> {
     let schema = parse_registry_schema(registry_root, true)?;
-    let graph = create_registry_graph::<(), SimpleObjectLine, LinkInfoSchemaKey>(registry_root, &schema, false)?;
+    let graph = create_registry_graph::<(), SimpleObjectLine, LinkInfoSchemaKey>(registry_root, &schema, false, false)?;
     let t_obj = graph.get(&obj_type).ok_or("specified object type not found")?
         .iter().find(|x| x.object.filename == obj_name)
         .ok_or("specified obj_name not found")?;
@@ -107,7 +107,7 @@ pub fn output_path(registry_root: &Path, src_type: String, tgt_type: String,
     impl ExtraDataTrait for ParentInfo {}
 
     let schema = parse_registry_schema(registry_root, true)?;
-    let graph = create_registry_graph(registry_root, &schema, false)?;
+    let graph = create_registry_graph(registry_root, &schema, false, false)?;
     let s_obj = graph.get(&src_type)
         .ok_or("specified src object type not found")?
         .iter().find(|x| x.object.filename == src_name)
