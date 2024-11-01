@@ -139,8 +139,8 @@ let last_displayed_object = "";
 
 async function display_object(object_type, object_name, no_set_search) {
     const provided_obj_path = get_object_path(object_type, object_name);
-    expectedWindowHash = provided_obj_path;
-    window.location.hash = provided_obj_path;
+    expectedWindowHash = "/" + provided_obj_path;
+    window.location.hash = "/" + provided_obj_path;
     if (last_displayed_object === provided_obj_path) {
         set_page_state("object");
         return;
@@ -377,13 +377,18 @@ async function handle_window_hash() {
         target = target.substring(1);
         searchBox.value = target;
         await perform_search(target);
-    } else {
+    } else if (target.startsWith("/")) {
+        target = target.substring(1);
         if (target === "") {
             searchBox.value = "";
             set_page_state("main");
             return;
         }
         await navigate_to_window_hash(target);
+    } else {
+        searchBox.value = "";
+        expectedWindowHash = "";
+        set_page_state("main");
     }
 }
 
