@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 use serde::Serialize;
 use crate::modules::object_reader::{OrderedObjectLine, RegistryObject};
 use crate::modules::registry_graph::{create_registry_graph, parse_registry_schema, LinkInfoLineNumberOnly, RegistryGraph};
-use crate::modules::util::{get_current_unix_time, BoxResult};
+use crate::modules::util::{get_current_unix_time, get_git_commit_hash, BoxResult};
 
 
 #[derive(Default)]
@@ -12,9 +12,11 @@ pub(super) struct AppState {
     pub objects: HashMap<String, Vec<WebRegistryObject>>,
     pub index: HashMap<String, Vec<String>>,
     pub etag: String,
+    pub commit_hash: String,
     pub roa4: Option<String>,
     pub roa6: Option<String>,
     pub roa_json: Option<String>,
+    pub roa_disabled: bool
 }
 
 #[derive(Debug, Serialize)]
@@ -29,7 +31,8 @@ pub(super) struct WebRegistryObject {
 pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<RwLock<AppState>>, with_roa: bool) -> BoxResult<()> {
     let schema = parse_registry_schema(registry_root.as_ref(), false)?;
     let graph: RegistryGraph<(), OrderedObjectLine, LinkInfoLineNumberOnly> = create_registry_graph(registry_root.as_ref(), &schema, true, true)?;
-
+    let commit_hash = get_git_commit_hash(&registry_root).unwrap_or(String::from("N/A"));
+    
     let mut graph_web = HashMap::with_capacity(graph.capacity());
     let mut index_map: HashMap<String, Vec<String>> = HashMap::with_capacity(graph.capacity());
     for (c, x) in &graph {
@@ -70,7 +73,7 @@ pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<
     app_state_lock.objects = graph_web;
     app_state_lock.index = index_map;
     app_state_lock.etag = get_current_unix_time().to_string();
-
+    app_state_lock.commit_hash = commit_hash;
     app_state_lock.roa4 = roa4;
     app_state_lock.roa6 = roa6;
     app_state_lock.roa_json = roa_json;

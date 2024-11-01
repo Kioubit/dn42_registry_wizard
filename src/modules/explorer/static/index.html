@@ -150,6 +150,10 @@
         #errorDisplayDiv {
             color: red;
         }
+
+        #infoDialogCloseButton {
+            float: right;
+        }
     </style>
 </head>
 <body>
@@ -191,8 +195,19 @@
 <div id="statDisplayDiv" class="noDisplay">
     <h3>Object statistics</h3>
     <div id="statDisplayInner"></div>
-    <div id="explorerBranding">Explorer powered by dn42_registry_wizard</div>
+    <div id="explorerBranding">
+        <div>Explorer powered by dn42_registry_wizard</div>
+        <a href="#" id="moreInfoLink">More information</a>
+    </div>
 </div>
+<dialog id="infoDialog">
+    <div id="infoDialogInner" class="word-break-all"></div>
+    <div id="infoDialogAdditional">
+        <hr>
+        ROA data endpoints: ['/api/roa/v4/', '/api/roa/v6/', '/api/roa/json/']
+    </div>
+    <button id="infoDialogCloseButton">Close</button>
+</dialog>
 </body>
 <script src="explorer.js"></script>
 </html>

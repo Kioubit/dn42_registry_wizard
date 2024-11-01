@@ -8,8 +8,11 @@ const searchBox = document.getElementById('searchBox');
 const statDisplayDiv = document.getElementById('statDisplayDiv');
 const statDisplayInner = document.getElementById('statDisplayInner');
 const errorDisplayDiv = document.getElementById('errorDisplayDiv');
+const moreInfoLink = document.getElementById("moreInfoLink");
+const infoDialog = document.getElementById("infoDialog");
 
 let index = null;
+let info = null;
 
 async function fetch_index() {
     if (index != null) {
@@ -17,7 +20,9 @@ async function fetch_index() {
     }
     try {
         let response = await fetch('api/index/');
-        index = await response.json();
+        const json = await response.json();
+        info = json["i"];
+        index = json["d"];
     } catch (e) {
         console.log(e);
         errorDisplayDiv.innerText = "Error fetching index";
@@ -38,9 +43,7 @@ async function perform_search(query) {
 
     searchDisplayDiv.innerHTML = "";
     set_page_state("search");
-
-    expectedWindowHash = "?" + query;
-    window.location.hash = "?" + query;
+    const orig_query = query;
 
     let search_category = "";
     if (query.includes("/")) {
@@ -98,9 +101,12 @@ async function perform_search(query) {
 
     if (result_count === 1) {
         await display_object(last_category, last_result, true);
+        return;
     } else if (result_count === 0) {
         searchDisplayDiv.innerText = "No results";
     }
+    expectedWindowHash = "?" + orig_query;
+    window.location.hash = "?" + orig_query;
 }
 
 function append_search_result(object_type, object_name) {
@@ -140,7 +146,9 @@ let last_displayed_object = "";
 async function display_object(object_type, object_name, no_set_search) {
     const provided_obj_path = get_object_path(object_type, object_name);
     expectedWindowHash = "/" + provided_obj_path;
-    window.location.hash = "/" + provided_obj_path;
+    if (window.location.hash !== ("#/" + provided_obj_path)) {
+        window.location.hash = "/" + provided_obj_path;
+    }
     if (last_displayed_object === provided_obj_path) {
         set_page_state("object");
         return;
@@ -426,6 +434,25 @@ searchBox.oninput = () => {
         perform_search(searchBox.value).then();
     }, 150);
 };
+
+moreInfoLink.onclick = async () => {
+    const inner = document.getElementById("infoDialogInner");
+    const inner_additional = document.getElementById("infoDialogAdditional");
+    const close = document.getElementById("infoDialogCloseButton");
+    inner.innerText = "Please wait...";
+    infoDialog.showModal();
+    close.onclick = () => {
+        infoDialog.close();
+    }
+    await fetch_index();
+    const with_roa = info["roa"];
+    inner.innerText = `Registry git commit hash: ${info["commit"]}\nGeneration time: ${info["time"]}\nROA data generation enabled: ${with_roa}`;
+    if (!with_roa) {
+        inner_additional.classList.add("noDisplay");
+    } else {
+        inner_additional.classList.remove("noDisplay");
+    }
+}
 
 (async function main() {
     await get_stats();

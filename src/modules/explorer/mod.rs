@@ -28,6 +28,13 @@ pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16, with_roa: bool
         if let Err(err) = state::update_registry_data(registry_root.clone(), app_state.clone(), with_roa).await {
             return Err(format!("Error reading registry data: {}", err));
         }
+        if !with_roa {
+            app_state.write().unwrap().roa_disabled  = true;
+            const MSG_ROA_DISABLED: &str = "ROA data generation disabled";
+            app_state.write().unwrap().roa4 = Some(String::from(MSG_ROA_DISABLED));
+            app_state.write().unwrap().roa6 = Some(String::from(MSG_ROA_DISABLED));
+            app_state.write().unwrap().roa_json = Some(String::from(MSG_ROA_DISABLED));
+        }
 
         let (sig_chan_tx, mut sig_chan_rx) = channel::<CustomSignal>(1);
         let signal_listener_handle = tokio::spawn(signal_listener(sig_chan_tx));
@@ -84,7 +91,7 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
         .with_state(app_state);
 
     eprintln!("Starting server on port {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update", port);
-    eprintln!("Roa data endpoints: ['/api/roa/v4/', '/api/roa/v6/', '/api/roa/json/']");
+    eprintln!("ROA data endpoints: ['/api/roa/v4/', '/api/roa/v6/', '/api/roa/json/']");
     axum::serve(listener, app).with_graceful_shutdown(async move {
         loop {
             match sig_chan_rx.recv().await.unwrap() {

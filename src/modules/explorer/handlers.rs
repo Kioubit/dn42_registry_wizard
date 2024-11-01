@@ -21,7 +21,20 @@ pub(super) async fn index_handler(request_headers: HeaderMap, State(u): State<Ar
     if etag == client_etag {
         return (StatusCode::NOT_MODIFIED, "Not Modified").into_response();
     }
-    let r = serde_json::to_string(&u.index);
+
+    let mut m  = serde_json::map::Map::new();
+    m.insert("commit".to_string(), serde_json::to_value(&u.commit_hash).unwrap_or_default());
+    m.insert("roa".to_string(), serde_json::to_value(!u.roa_disabled).unwrap_or_default());
+    m.insert("time".to_string(), serde_json::to_value(&u.etag).unwrap_or_default());
+    let info_val = serde_json::to_value(&m).unwrap_or_default();
+    let jr = serde_json::to_value(&u.index);
+    if jr.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+    }
+    let mut outer_map = serde_json::map::Map::with_capacity(2);
+    outer_map.insert("i".to_string(), info_val);
+    outer_map.insert("d".to_string(), jr.unwrap());
+    let r = serde_json::to_string(&outer_map);
     drop(u);
 
     if r.is_err() {
@@ -85,7 +98,7 @@ pub(super) async fn roa_handler_v4(State(u): State<Arc<RwLock<AppState>>>) -> im
     if let Some(ref roa) = u.roa4  {
         (headers, roa.clone()).into_response()
     } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, "Roa data unavailable").into_response()
+        (StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
     }
 }
 
@@ -96,7 +109,7 @@ pub(super) async fn roa_handler_v6(State(u): State<Arc<RwLock<AppState>>>) -> im
     if let Some(ref roa) = u.roa6  {
         (headers, roa.clone()).into_response()
     } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, "Roa data unavailable").into_response()
+        (StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
     }
 }
 
@@ -107,6 +120,6 @@ pub(super) async fn roa_handler_json(State(u): State<Arc<RwLock<AppState>>>) -> 
     if let Some(ref roa) = u.roa_json  {
         (headers, roa.clone()).into_response()
     } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, "Roa data unavailable").into_response()
+        (StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
     }
 }

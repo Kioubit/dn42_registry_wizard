@@ -85,3 +85,16 @@ pub(crate) fn get_current_unix_time() -> u64 {
         .unwrap();
     since_the_epoch.as_secs()
 }
+
+pub(crate) fn get_git_commit_hash(path: impl AsRef<Path>) -> Option<String> {
+    let cmd_output = Command::new("git")
+        .arg("log")
+        .arg("-1")
+        .arg("--format=%H")
+        .current_dir(path)
+        .output().ok()?;
+    if !cmd_output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&cmd_output.stdout).trim_end_matches('\n').to_string())
+}
