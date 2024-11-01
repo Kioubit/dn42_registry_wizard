@@ -137,14 +137,18 @@ pub fn get_arg_matches() -> ArgMatches {
                 ]),
             #[cfg(feature = "explorer")]
             Command::new("explorer")
-                .about("Start web based registry explorer")
+                .about("Start web based registry explorer (including ROA file server)")
                 .args([
                     Arg::new("port")
                         .long("port")
                         .short('p')
                         .value_parser(clap::value_parser!(u16))
                         .default_value("8080")
-                        .help("Port to listen on")
+                        .help("Port to listen on"),
+                    Arg::new("disable-roa")
+                        .help("Disable ROA API endpoint")
+                        .long("disable-roa")
+                        .action(ArgAction::SetTrue),
                 ]),
             Command::new("remove")
                 .about("Safely remove a list of registry objects along with all their dependencies")

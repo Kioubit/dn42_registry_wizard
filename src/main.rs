@@ -130,7 +130,8 @@ fn main() {
         Some(("explorer", c)) => {
             use crate::modules::explorer::start_explorer;
             let port = *c.get_one::<u16>("port").unwrap();
-            let result = start_explorer(&base_path, port);
+            let disable_roa = *c.get_one::<bool>("disable-roa").unwrap();
+            let result = start_explorer(&base_path, port, !disable_roa);
             output_result(result);
         }
         Some(("remove", c)) => {

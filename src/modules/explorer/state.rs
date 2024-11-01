@@ -12,6 +12,9 @@ pub(super) struct AppState {
     pub objects: HashMap<String, Vec<WebRegistryObject>>,
     pub index: HashMap<String, Vec<String>>,
     pub etag: String,
+    pub roa4: Option<String>,
+    pub roa6: Option<String>,
+    pub roa_json: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -23,7 +26,7 @@ pub(super) struct WebRegistryObject {
 }
 
 
-pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<RwLock<AppState>>) -> BoxResult<()> {
+pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<RwLock<AppState>>, with_roa: bool) -> BoxResult<()> {
     let schema = parse_registry_schema(registry_root.as_ref(), false)?;
     let graph: RegistryGraph<(), OrderedObjectLine, LinkInfoLineNumberOnly> = create_registry_graph(registry_root.as_ref(), &schema, true, true)?;
 
@@ -48,10 +51,28 @@ pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<
         graph_web.insert(c.clone(), list);
     }
 
+    let mut roa4 = None;
+    let mut roa6 = None;
+    let mut roa_json = None;
+    if with_roa {
+        roa4 = roa_wizard_lib::generate_bird(&registry_root, false).map_err(|x| {
+            eprintln!("Error generating bird roa4: {:?}", x);
+        }).map(|x| x.0).ok();
+        roa6 = roa_wizard_lib::generate_bird(&registry_root, true).map_err(|x| {
+            eprintln!("Error generating bird roa6: {:?}", x);
+        }).map(|x| x.0).ok();
+        roa_json = roa_wizard_lib::generate_json(&registry_root).map_err(|x| {
+            eprintln!("Error generating roa JSON: {:?}", x);
+        }).map(|x|x.0).ok();
+    }
 
     let mut app_state_lock = app_state.write().unwrap();
     app_state_lock.objects = graph_web;
     app_state_lock.index = index_map;
     app_state_lock.etag = get_current_unix_time().to_string();
+
+    app_state_lock.roa4 = roa4;
+    app_state_lock.roa6 = roa6;
+    app_state_lock.roa_json = roa_json;
     Ok(())
 }

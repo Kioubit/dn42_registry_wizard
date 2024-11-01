@@ -20,12 +20,12 @@ enum CustomSignal {
     DataUpdate,
 }
 
-pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16) -> BoxResult<String> {
+pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16, with_roa: bool) -> BoxResult<String> {
     let registry_root: PathBuf = registry_root.as_ref().to_owned();
     let app_state = Arc::new(RwLock::new(Default::default()));
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async move {
-        if let Err(err) = state::update_registry_data(registry_root.clone(), app_state.clone()).await {
+        if let Err(err) = state::update_registry_data(registry_root.clone(), app_state.clone(), with_roa).await {
             return Err(format!("Error reading registry data: {}", err));
         }
 
@@ -35,7 +35,7 @@ pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16) -> BoxResult<S
 
         let sig_chan_rx_2 = sig_chan_rx.resubscribe();
         let app_state_clone = app_state.clone();
-        let registry_data_updater = tokio::spawn(async move  {
+        let registry_data_updater = tokio::spawn(async move {
             loop {
                 match sig_chan_rx.recv().await.unwrap() {
                     CustomSignal::Shutdown => {
@@ -43,7 +43,7 @@ pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16) -> BoxResult<S
                     }
                     CustomSignal::DataUpdate => {
                         eprintln!("Registry data update triggered");
-                        if let Err(err) = state::update_registry_data(registry_root.clone(), app_state.clone()).await {
+                        if let Err(err) = state::update_registry_data(registry_root.clone(), app_state.clone(), with_roa).await {
                             eprintln!("Error updating registry data: {}", err);
                         }
                         eprintln!("Registry data update completed")
@@ -78,9 +78,13 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
         .route("/*path", get(handlers::root_handler))
         .route("/api/index/", get(handlers::index_handler))
         .route("/api/object/", get(handlers::get_object))
+        .route("/api/roa/v4/", get(handlers::roa_handler_v4))
+        .route("/api/roa/v6/", get(handlers::roa_handler_v6))
+        .route("/api/roa/json/", get(handlers::roa_handler_json))
         .with_state(app_state);
 
     eprintln!("Starting server on port {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update", port);
+    eprintln!("Roa data endpoints: ['/api/roa/v4/', '/api/roa/v6/', '/api/roa/json/']");
     axum::serve(listener, app).with_graceful_shutdown(async move {
         loop {
             match sig_chan_rx.recv().await.unwrap() {
