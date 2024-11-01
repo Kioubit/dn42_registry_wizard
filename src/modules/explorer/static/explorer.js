@@ -106,7 +106,7 @@ async function perform_search(query) {
 function append_search_result(object_type, object_name) {
     const div = document.createElement("div");
     const elem = document.createElement("a");
-    elem.href = `#${get_object_path(object_type, object_name)}`;
+    elem.href = `#/${get_object_path(object_type, object_name)}`;
     elem.innerText = object_name;
     elem.onclick = async (ev) => {
         ev.preventDefault();
@@ -169,7 +169,7 @@ async function display_object(object_type, object_name, no_set_search) {
         searchBox.value = name;
     }
     dataTitleDisplay.innerText = name;
-    dataTitleDisplay.href = `#${name}`
+    dataTitleDisplay.href = `#/${name}`
     dataTitleDisplay.onclick = (ev) => {
         ev.preventDefault();
         searchBox.value = name;
@@ -199,13 +199,13 @@ async function display_object(object_type, object_name, no_set_search) {
             const link_elem = document.createElement("a");
             if (a === object_type && b === object_name) {
                 // link to self
-                link_elem.href = "#";
+                link_elem.href = `#/${get_object_path(a, b)}`;
                 link_elem.style.color = "grey";
                 link_elem.onclick = (ev) => {
                     ev.preventDefault();
                 };
             } else {
-                link_elem.href = `#${get_object_path(a, b)}`;
+                link_elem.href = `#/${get_object_path(a, b)}`;
                 link_elem.onclick = (ev) => {
                     ev.preventDefault();
                     display_object(a, b);
@@ -242,7 +242,7 @@ async function display_object(object_type, object_name, no_set_search) {
             const tr = document.createElement("tr");
             const td1 = document.createElement("td");
             const link_elem = document.createElement("a");
-            link_elem.href = `#${get_object_path(back_link_category, back_link_name)}`;
+            link_elem.href = `#/${get_object_path(back_link_category, back_link_name)}`;
             link_elem.onclick = (ev) => {
                 ev.preventDefault();
                 display_object(back_link_category, back_link_name);
