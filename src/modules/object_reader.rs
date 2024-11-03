@@ -9,10 +9,10 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
 
-pub(in crate::modules) trait ObjectLine : Debug + Serialize + Clone {
+pub(in crate::modules) trait ObjectLine: Debug + Serialize + Clone {
     fn append_to_last(key: &mut Vec<Self>, value: &str);
-    fn push_line(key :&mut Vec<Self>, value: String, line: usize);
-    
+    fn push_line(key: &mut Vec<Self>, value: String, line: usize);
+
     fn get_line_value(&self) -> String;
 }
 
@@ -20,7 +20,10 @@ pub(in crate::modules) type OrderedObjectLine = (usize, String);
 pub(in crate::modules) type SimpleObjectLine = String;
 
 #[derive(Debug, Serialize, Clone)]
-pub(in crate::modules) struct RegistryObject<T> where T: ObjectLine {
+pub(in crate::modules) struct RegistryObject<T>
+where
+    T: ObjectLine,
+{
     pub key_value: HashMap<String, Vec<T>>,
     pub filename: String,
 }
@@ -169,15 +172,15 @@ impl ObjectLine for OrderedObjectLine {
 
 
 pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: &Path, exclusive_fields: &Option<Vec<String>>,
-                                                                                      filtered_fields: &Option<Vec<String>>)
-                                                                                      -> BoxResult<HashMap<String, Vec<T>>> {
+                                                                          filtered_fields: &Option<Vec<String>>)
+                                                                          -> BoxResult<HashMap<String, Vec<T>>> {
     let mut map: HashMap<String, Vec<T>> = HashMap::new();
     let lines = util::read_lines(path)?;
-    let mut last_obj_key : Option<String> = None;
+    let mut last_obj_key: Option<String> = None;
     for (no, line) in lines.into_iter().enumerate() {
         let line = line?;
         let split_result = line.split_once(':');
-        if !line.starts_with(' ') && split_result.is_some()  {
+        if !line.starts_with(' ') && split_result.is_some() {
             let result = split_result.unwrap();
             last_obj_key = None;
             let obj_key = result.0.trim_end();
@@ -203,9 +206,8 @@ pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: 
         } else if let Some(ref last_obj_key) = last_obj_key {
             // Handle multi-line
             let key = map.get_mut(last_obj_key).unwrap();
-            if line.starts_with('+') {
-                T::append_to_last(key, "\n\n");
-            } else { T::append_to_last(key, "\n");
+            T::append_to_last(key, "\n");
+            if !line.starts_with('+') {
                 T::append_to_last(key, line.trim());
             }
         }

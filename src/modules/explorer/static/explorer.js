@@ -190,7 +190,7 @@ async function display_object(object_type, object_name, no_set_search) {
     );
     combined.sort((a, b) => a.value[0] - b.value[0]);
     for (const entry of combined) {
-        const {type: key, value: [_, value]} = entry;
+        let {type: key, value: [_, value]} = entry;
         const trElem = document.createElement('tr');
         const tdElemKey = document.createElement('td');
         const tdElemValue = document.createElement('td');
@@ -228,6 +228,10 @@ async function display_object(object_type, object_name, no_set_search) {
             break;
         }
         if (!found_link) {
+            if (value.substring(value.length - 1) === "\n") {
+                // Handle trailing new line that won't be rendered in HTML
+                value += "\n";
+            }
             tdElemValue.innerText = value;
         }
         trElem.appendChild(tdElemKey);
@@ -305,7 +309,10 @@ function* getBackLinks(back_links) {
 
 async function get_stats() {
     await fetch_index();
-    for (const category of Object.entries(index)) {
+    const entries = Object.entries(index).sort((a, b) => {
+        return a[0].localeCompare(b[0]);
+    });
+    for (const category of entries) {
         const elem = document.createElement("div");
         const href = document.createElement("a");
         href.href = `#?${category[0]}/`;

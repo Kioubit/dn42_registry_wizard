@@ -94,6 +94,7 @@ pub(super) async fn get_object(request_headers: HeaderMap, Query(params): Query<
 pub(super) async fn roa_handler_v4(State(u): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("text/plain"));
+    headers.insert("Cache-Control", HeaderValue::from_static("max-age=3600, public, stale-if-error=86400"));
     let u = u.read().unwrap();
     if let Some(ref roa) = u.roa4  {
         (headers, roa.clone()).into_response()
@@ -105,6 +106,7 @@ pub(super) async fn roa_handler_v4(State(u): State<Arc<RwLock<AppState>>>) -> im
 pub(super) async fn roa_handler_v6(State(u): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("text/plain"));
+    headers.insert("Cache-Control", HeaderValue::from_static("max-age=3600, public, stale-if-error=86400"));
     let u = u.read().unwrap();
     if let Some(ref roa) = u.roa6  {
         (headers, roa.clone()).into_response()
@@ -116,6 +118,7 @@ pub(super) async fn roa_handler_v6(State(u): State<Arc<RwLock<AppState>>>) -> im
 pub(super) async fn roa_handler_json(State(u): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    headers.insert("Cache-Control", HeaderValue::from_static("max-age=3600, public, stale-if-error=86400"));
     let u = u.read().unwrap();
     if let Some(ref roa) = u.roa_json  {
         (headers, roa.clone()).into_response()
