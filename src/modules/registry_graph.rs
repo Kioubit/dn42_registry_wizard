@@ -10,7 +10,8 @@ use std::rc::{Rc, Weak};
 
 #[derive(Debug, Serialize)]
 pub(crate) struct Schema {
-    pub name: String,
+    pub dir_name: String,
+    pub schema_ref: String,
     pub keys: Vec<SchemaField>,
 }
 
@@ -54,7 +55,8 @@ type LinkInformation<M, T, L> = (L, Weak<LinkedRegistryObject<M, T, L>>);
 
 #[derive(Debug, Serialize)]
 pub(crate) struct LinkedRegistryObject<M: ExtraDataTrait, T: ObjectLine, L: LinkInfoType<T>> {
-    pub category: String,
+    pub schema_ref: String,
+    pub data_dir: String,
     pub object: RegistryObject<T>,
     #[serde(serialize_with = "links_serialize")]
     forward_links: RefCell<Vec<LinkInformation<M, T, L>>>,
@@ -120,7 +122,7 @@ where
         .iter()
         .filter_map(|x| {
             x.1.upgrade().and_then(|x| {
-                format!("{}/{}", x.category, x.object.filename).into()
+                format!("{}/{}", x.schema_ref, x.object.filename).into()
             })
         })
         .collect::<Vec<_>>();
@@ -139,20 +141,21 @@ where
     let mut object_list: RegistryGraph<M, T, L> = HashMap::new();
 
     for schema in registry_schema {
-        eprintln!("Reading {:?}", &("data/".to_owned() + &schema.name));
-        let objects = read_registry_objects(registry_root, Path::new(&("data/".to_owned() + &schema.name)), false);
+        eprintln!("Reading {:?}", &("data/".to_owned() + &schema.dir_name));
+        let objects = read_registry_objects(registry_root, Path::new(&("data/".to_owned() + &schema.dir_name)), false);
         if objects.is_err() {
-            eprintln!("Error accessing directory referred to by schema: {}", schema.name.clone());
+            eprintln!("Error accessing directory referred to by schema: {}", schema.dir_name);
             continue;
         }
         for object in objects? {
-            let x = object_list.entry(schema.name.clone()).or_default();
+            let x = object_list.entry(schema.schema_ref.clone()).or_default();
             x.push(Rc::from(LinkedRegistryObject {
-                category: schema.name.clone(),
+                schema_ref: schema.schema_ref.clone(),
                 object,
                 forward_links: RefCell::new(vec![]),
                 back_links: RefCell::new(vec![]),
                 extra: Default::default(),
+                data_dir: schema.dir_name.clone(),
             }))
         }
     }
@@ -162,7 +165,7 @@ where
     for object in object_list.values().flatten() {
         // For each object regardless of category
 
-        let applicable_schema = registry_schema.iter().find(|x| x.name == *object.category).unwrap();
+        let applicable_schema = registry_schema.iter().find(|x| x.schema_ref == *object.schema_ref).unwrap();
         let schema_links = &applicable_schema.keys;
         for schema_link in schema_links {
             let schema_link_targets = &schema_link.lookup_targets;
@@ -240,20 +243,36 @@ pub(crate) fn parse_registry_schema(registry_root: &Path, exclude_registry_key: 
 
     let schema_objects: Vec<RegistryObject<SimpleObjectLine>> = read_registry_objects(registry_root, Path::new("data/schema"), false)?;
     for schema_object in schema_objects {
-        let mut name_vec = schema_object.key_value.get("dir-name");
-        if name_vec.is_none() {
-            name_vec = schema_object.key_value.get("ref");
-            if name_vec.is_none() {
-                eprintln!("Error: schema object missing 'ref' key: {}", schema_object.filename);
-                continue;
-            }
+        let schema_ref = schema_object.key_value.get("ref")
+            .and_then(|x| x.first());
+        if schema_ref.is_none() {
+            eprintln!("Error: schema object missing 'ref' key: {}", schema_object.filename);
+            continue;
         }
-
-        let name_vec_first = name_vec.unwrap().first().unwrap();
-        let name = match name_vec_first.strip_prefix("dn42.") {
-            Some(x) => x,
-            None => name_vec_first,
+        let schema_ref = match schema_ref.unwrap().strip_prefix("dn42.") {
+            None => {
+                schema_ref.unwrap()
+            }
+            Some(x) => {
+                if x.contains('.') {
+                    eprintln!("Warning: schema ref does not contain '.': {}", schema_object.filename);
+                }
+                x
+            }
         };
+        
+        
+        let dir_name_first = schema_object.key_value.get("dir-name")
+            .and_then(|x| x.first());
+        let dir_name: String = match dir_name_first {
+            Some(x) => {
+               x.to_string()
+            }
+            None => {
+                schema_ref.to_string()
+            }
+        };
+
 
         let key_option = schema_object.key_value.get("key");
         if key_option.is_none() {
@@ -271,8 +290,16 @@ pub(crate) fn parse_registry_schema(registry_root: &Path, exclude_registry_key: 
             if lookup_key_target_position.starts_with("lookup=") {
                 lookup_key_targets = lookup_key_target_position.strip_prefix("lookup=")
                     .unwrap().split(',')
-                    .filter_map(|s| s.strip_prefix("dn42."))
-                    .map(|x| x.to_string())
+                    .map(|x| {
+                        if let Some(x) = x.strip_prefix("dn42.") {
+                            x.to_string()
+                        } else {
+                            if x.contains('.') {
+                                eprintln!("Warning: schema lookup key '{}' does not contain '.': {}", x, schema_object.filename);
+                            }
+                            x.to_string()
+                        }
+                    })
                     .collect::<Vec<String>>();
                 if exclude_registry_key {
                     lookup_key_targets.retain(|x| x != "registry")
@@ -289,8 +316,9 @@ pub(crate) fn parse_registry_schema(registry_root: &Path, exclude_registry_key: 
 
 
         schemata.push(Schema {
-            name: name.to_string(),
+            dir_name,
             keys: schema_keys,
+            schema_ref: schema_ref.to_string(),
         });
     }
 

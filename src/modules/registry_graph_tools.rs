@@ -59,7 +59,7 @@ pub fn output_related(registry_root: &Path, obj_type: String,
     visited.push(t_obj.clone());
     to_visit.push(t_obj.clone());
     while let Some(obj) = to_visit.pop() {
-        if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
+        if WEAKLY_REFERENCING.contains(&obj.schema_ref.as_str()) {
             continue;
         }
         if let Some(ref target) = only_related_to_mnt {
@@ -94,7 +94,7 @@ pub fn output_related(registry_root: &Path, obj_type: String,
     }
 
     let result: Vec<_> = visited.iter()
-        .map(|x| format!("{}/{}", x.category, x.object.filename))
+        .map(|x| format!("{}/{}", x.schema_ref, x.object.filename))
         .collect();
     Ok(serde_json::to_string(&result)?)
 }
@@ -125,10 +125,10 @@ pub fn output_path(registry_root: &Path, src_type: String, tgt_type: String,
     let mut found = false;
     while !to_visit.is_empty() {
         let obj = to_visit.remove(0);
-        if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
+        if WEAKLY_REFERENCING.contains(&obj.schema_ref.as_str()) {
             continue;
         }
-        if &obj.category == "aut-num" && obj.object.filename == "AS0" {
+        if &obj.schema_ref == "aut-num" && obj.object.filename == "AS0" {
             // Special case
             continue;
         }
@@ -163,6 +163,6 @@ pub fn output_path(registry_root: &Path, src_type: String, tgt_type: String,
     }
 
     Ok(rev_path.iter().rev()
-        .map(|x| format!("{}/{}", x.category, x.object.filename.clone()))
+        .map(|x| format!("{}/{}", x.schema_ref, x.object.filename.clone()))
         .collect::<Vec<String>>().join(" > "))
 }

@@ -54,7 +54,7 @@ pub fn get_arg_matches() -> ArgMatches {
                 .args([
                     Arg::new("object_type")
                         .required(true)
-                        .help("object type such as 'mntner', 'domain' etc. \
+                        .help("object type such as 'mntner', 'dns' etc. \
                                      (Based on the directories in the registry)"),
                     Arg::new("exclusive_fields")
                         .short('x')
@@ -69,7 +69,7 @@ pub fn get_arg_matches() -> ArgMatches {
                         .help("Don't output objects without keys (useful if filtering)"),
                 ]),
             Command::new("graph")
-                .about("Registry object output with forward and backlinks, path between objects, related objects (JSON / graphviz dot format)")
+                .about("Object output with forward and backlinks, path between objects, related objects (JSON / graphviz dot format)")
                 .subcommand_required(true)
                 .subcommands([
                     Command::new("list")
@@ -112,7 +112,7 @@ pub fn get_arg_matches() -> ArgMatches {
                             .args(["enforce_mnt_by", "related_mnt_by"])
                             .required(false)),
                     Command::new("path")
-                        .about("Output the shorted path found between two registry objects (if one exists)")
+                        .about("Output the shortest path found between two registry objects (if one exists)")
                         .args([
                             Arg::new("src_object_type")
                                 .required(true)
@@ -137,7 +137,7 @@ pub fn get_arg_matches() -> ArgMatches {
                 ]),
             #[cfg(feature = "explorer")]
             Command::new("explorer")
-                .about("Start web based registry explorer (including ROA file server)")
+                .about("Start web-based registry explorer (including a ROA file server)")
                 .args([
                     Arg::new("port")
                         .long("port")

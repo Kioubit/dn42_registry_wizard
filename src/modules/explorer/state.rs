@@ -41,11 +41,11 @@ pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<
         for elem in x {
             let v = WebRegistryObject {
                 object: elem.object.clone(),
-                category: elem.category.clone(),
+                category: elem.schema_ref.clone(),
                 back_links: elem.get_back_links()
-                    .map(|x| x.1.category.clone() + "/" + &x.1.object.filename).collect(),
+                    .map(|x| x.1.schema_ref.clone() + "/" + &x.1.object.filename).collect(),
                 forward_links: elem.get_forward_links()
-                    .map(|(li, obj)| (li, obj.category.clone() + "/" + &obj.object.filename)).collect(),
+                    .map(|(li, obj)| (li, obj.schema_ref.clone() + "/" + &obj.object.filename)).collect(),
             };
             name_list.push(elem.object.filename.clone());
             list.push(v);

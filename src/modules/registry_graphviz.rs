@@ -51,7 +51,7 @@ impl<'a> dot::Labeller<'a, Nd, Ed> for Graph {
     fn graph_id(&'a self) -> dot::Id<'a> { dot::Id::new("graph1").unwrap() }
 
     fn node_id(&'a self, n: &Nd) -> dot::Id<'a> {
-        let name = format!("{}/{}", &n.category ,&n.object.filename);
+        let name = format!("{}/{}", &n.schema_ref ,&n.object.filename);
         let f = name.as_bytes().iter().fold(String::new(), |mut acc, &x| {
             acc.push_str(&format!("{:02x}", x));
             acc
@@ -61,7 +61,7 @@ impl<'a> dot::Labeller<'a, Nd, Ed> for Graph {
         dot::Id::new(id_str).unwrap()
     }
     fn node_label(&'a self, n: &Nd) -> dot::LabelText<'a> {
-        dot::LabelText::LabelStr(format!("{}/{}", n.category, n.object.filename).into())
+        dot::LabelText::LabelStr(format!("{}/{}", n.schema_ref, n.object.filename).into())
     }
     fn node_color(&'a self, n: &Nd) -> Option<dot::LabelText<'a>> {
         n.object.key_value.get("mnt-by").and_then(|mnt_list| {

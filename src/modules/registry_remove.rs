@@ -89,17 +89,17 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         to_visit.push(t.clone());
 
         while let Some(obj) = to_visit.pop() {
-            if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
+            if WEAKLY_REFERENCING.contains(&obj.schema_ref.as_str()) {
                 continue;
             }
-            if &obj.category == "aut-num" && obj.object.filename == "AS0" {
+            if &obj.schema_ref == "aut-num" && obj.object.filename == "AS0" {
                 // Special case
                 continue;
             }
 
             // If an *unmarked* mntner/aut-num vertex is encountered, unmark self and flag for manual review
             let empty_vec : Vec<OrderedObjectLine> = Vec::with_capacity(0);
-            if !obj.extra.marked.get() && obj.category == removal_category.as_str() {
+            if !obj.extra.marked.get() && obj.schema_ref == removal_category.as_str() {
                 t.extra.marked.set(false);
                 let t_mnt = t.object.key_value.get("mnt-by").unwrap_or(&empty_vec);
                 if !t_mnt.iter().map(|x| &x.1).collect::<Vec<_>>().contains(&&String::from("DN42-MNT")) || only_one_removal_item {
@@ -132,10 +132,10 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         to_visit.push(t.clone());
 
         while let Some(obj) = to_visit.pop() {
-            if WEAKLY_REFERENCING.contains(&obj.category.as_str()) {
+            if WEAKLY_REFERENCING.contains(&obj.schema_ref.as_str()) {
                 continue;
             }
-            if &obj.category == "aut-num" && obj.object.filename == "AS0" {
+            if &obj.schema_ref == "aut-num" && obj.object.filename == "AS0" {
                 // Special case
                 continue;
             }
@@ -143,7 +143,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
                 continue;
             }
             obj.extra.deleted.set(true);
-            output.push_str(&format!("rm 'data/{}/{}'\n", obj.category, obj.object.filename));
+            output.push_str(&format!("rm 'data/{}/{}'\n", obj.data_dir, obj.object.filename));
 
             link_visit(&obj, &mut visited, &mut to_visit);
         }
@@ -167,7 +167,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             }
             if !found {
                 w_item.extra.deleted.set(true);
-                output.push_str(&format!("rm 'data/{}/{}'\n", w_item.category, w_item.object.filename));
+                output.push_str(&format!("rm 'data/{}/{}'\n", w_item.data_dir, w_item.object.filename));
                 continue;
             }
         }
@@ -186,9 +186,8 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
                 has_links = true;
                 continue;
             }
-            //output.push_str(&format!("sed -i '/{}/d' 'data/{}/{}'\n", link.1.object.filename, item.category, item.object.filename));
             // Deletion based on line number of link
-            output.push_str(&format!("sed '{}d' 'data/{}/{}'\n", link.0 +1, item.category, item.object.filename));
+            output.push_str(&format!("sed '{}d' 'data/{}/{}'\n", link.0 +1, item.data_dir, item.object.filename));
         }
         if !has_links {
             for link in item.get_back_links() {
@@ -201,7 +200,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
 
         if !has_links {
             item.extra.deleted.set(true);
-            output.push_str(&format!("rm 'data/{}/{}'\n", item.category, item.object.filename));
+            output.push_str(&format!("rm 'data/{}/{}'\n", item.data_dir, item.object.filename));
             continue;
         }
     }
@@ -214,9 +213,9 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             continue;
         }
 
-        let applicable_schema = &registry_schema.iter().find(|x| x.name == item.category);
+        let applicable_schema = &registry_schema.iter().find(|x| x.schema_ref == item.schema_ref);
         if applicable_schema.is_none() {
-            eprintln!("Warning: can't find schema for category '{}'", item.category);
+            eprintln!("Warning: can't find schema for category '{}'", item.schema_ref);
             continue;
         }
         let required_categories = applicable_schema.unwrap()
@@ -226,13 +225,13 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             .collect::<Vec<_>>();
         let mut required_category_missing = false;
         for required_category in required_categories {
-            if *required_category == item.category {
+            if *required_category == item.schema_ref {
                 // We have that category
                 continue;
             }
             if !item.get_forward_links()
                 .filter(|x| !x.1.extra.deleted.get())
-                .any(|x| x.1.category == *required_category) {
+                .any(|x| x.1.schema_ref == *required_category) {
                 // If we don't find a link with the required category
                 required_category_missing = true;
                 break;
@@ -240,7 +239,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         }
         if required_category_missing {
             item.extra.deleted.set(true);
-            output.push_str(&format!("rm 'data/{}/{}'\n", item.category, item.object.filename));
+            output.push_str(&format!("rm 'data/{}/{}'\n", item.data_dir, item.object.filename));
             continue;
         }
     }
@@ -267,7 +266,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             if obj.extra.deleted.get() {
                 continue;
             }
-            if obj.category == "aut-num" {
+            if obj.schema_ref == "aut-num" {
                 graph_has_asn = true;
                 break;
             }
@@ -288,7 +287,7 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
             for visited in &visited.iter()
                 .filter(|x| !x.extra.deleted.get()).collect::<Vec<_>>() {
                 visited.extra.deleted.set(true);
-                output.push_str(&format!("rm 'data/{}/{}'\n", visited.category, visited.object.filename));
+                output.push_str(&format!("rm 'data/{}/{}'\n", visited.data_dir, visited.object.filename));
             }
         }
     }
