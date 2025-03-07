@@ -138,7 +138,10 @@ fn main() {
         Some(("rtr", c)) => {
             use crate::modules::rtr::start_rtr;
             let port = *c.get_one::<u16>("port").unwrap();
-            let result = start_rtr(&base_path, port);
+            let refresh = *c.get_one::<u32>("refresh").unwrap();
+            let retry = *c.get_one::<u32>("retry").unwrap();
+            let expire = *c.get_one::<u32>("expire").unwrap();
+            let result = start_rtr(&base_path, port, refresh, retry, expire);
             output_result(result);
         }
         Some(("remove", c)) => {

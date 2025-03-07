@@ -160,6 +160,21 @@ pub fn get_arg_matches() -> ArgMatches {
                         .value_parser(clap::value_parser!(u16))
                         .default_value("9323")
                         .help("Port to listen on"),
+                    Arg::new("refresh")
+                        .long("refresh")
+                        .value_parser(clap::value_parser!(u32))
+                        .default_value("3600")
+                        .help("RTR refresh timing"),
+                    Arg::new("expire")
+                        .long("expire")
+                        .value_parser(clap::value_parser!(u32))
+                        .default_value("7200")
+                        .help("RTR expire timing"),
+                    Arg::new("retry")
+                        .long("retry")
+                        .value_parser(clap::value_parser!(u32))
+                        .default_value("600")
+                        .help("RTR retry timing"),
                 ]),
             Command::new("remove")
                 .about("Safely remove a list of registry objects along with all their dependencies")
