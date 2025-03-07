@@ -6,19 +6,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::channel;
-use crate::modules::explorer::os_signals::signal_listener;
 use crate::modules::explorer::state::AppState;
+use crate::modules::util::os_signals::{signal_listener, CustomSignal};
 
 mod static_files;
 mod handlers;
 mod state;
-mod os_signals;
-
-#[derive(Debug, Clone)]
-enum CustomSignal {
-    Shutdown,
-    DataUpdate,
-}
 
 pub fn start_explorer(registry_root: impl AsRef<Path>, port: u16, with_roa: bool) -> BoxResult<String> {
     let registry_root: PathBuf = registry_root.as_ref().to_owned();

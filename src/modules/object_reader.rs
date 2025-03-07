@@ -1,4 +1,3 @@
-use crate::modules::util;
 use crate::modules::util::BoxResult;
 use serde::Serialize;
 use std::cell::RefCell;
@@ -7,7 +6,7 @@ use std::fmt::Debug;
 use std::fs::read_dir;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-
+use crate::modules::util;
 
 pub(in crate::modules) trait ObjectLine: Debug + Serialize + Clone {
     fn append_to_last(key: &mut Vec<Self>, value: &str);

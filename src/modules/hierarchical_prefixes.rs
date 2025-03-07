@@ -5,7 +5,7 @@ use std::str::FromStr;
 use cidr_utils::cidr::IpCidr;
 use serde::{Serialize};
 use crate::modules::object_reader::{read_registry_objects, RegistryObject, SimpleObjectLine};
-use crate::modules::util;
+use crate::modules::util::BoxResult;
 
 type PrefixTree = Rc<RefCell<HierarchicalPrefix>>;
 
@@ -25,7 +25,7 @@ struct IpCidrDef(
 );
 
 
-pub fn output(registry_root: &Path, v4: bool) -> util::BoxResult<String> {
+pub fn output(registry_root: &Path, v4: bool) -> BoxResult<String> {
     let inetnum_path: &Path = if v4 {
         Path::new("data/inetnum/")
     } else {

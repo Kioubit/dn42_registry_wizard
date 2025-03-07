@@ -1,6 +1,6 @@
-use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Command};
-use crate::{NAME, VERSION};
 use crate::modules::util::EitherOr;
+use crate::{NAME, VERSION};
+use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Command};
 
 pub fn get_arg_matches() -> ArgMatches {
     Command::new(NAME)
@@ -149,6 +149,17 @@ pub fn get_arg_matches() -> ArgMatches {
                         .help("Disable ROA API endpoint")
                         .long("disable-roa")
                         .action(ArgAction::SetTrue),
+                ]),
+            #[cfg(feature = "rtr-server")]
+            Command::new("rtr")
+                .about("Start RTR server for ROA data")
+                .args([
+                    Arg::new("port")
+                        .long("port")
+                        .short('p')
+                        .value_parser(clap::value_parser!(u16))
+                        .default_value("9323")
+                        .help("Port to listen on"),
                 ]),
             Command::new("remove")
                 .about("Safely remove a list of registry objects along with all their dependencies")

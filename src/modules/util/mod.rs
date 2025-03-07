@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 
+#[cfg(any(feature = "explorer", feature = "rtr-server"))]
+pub mod os_signals;
+
 pub type BoxResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 #[derive(Copy, Clone, PartialEq, Debug)]

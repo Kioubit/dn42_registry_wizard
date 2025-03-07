@@ -134,6 +134,13 @@ fn main() {
             let result = start_explorer(&base_path, port, !disable_roa);
             output_result(result);
         }
+        #[cfg(feature = "rtr-server")]
+        Some(("rtr", c)) => {
+            use crate::modules::rtr::start_rtr;
+            let port = *c.get_one::<u16>("port").unwrap();
+            let result = start_rtr(&base_path, port);
+            output_result(result);
+        }
         Some(("remove", c)) => {
             let result = match c.subcommand() {
                 Some(("mnt", c)) => {

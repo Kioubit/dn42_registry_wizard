@@ -11,3 +11,5 @@ pub mod inactive_asns;
 pub mod registry_graph_tools;
 #[cfg(feature = "explorer")]
 pub mod explorer;
+#[cfg(feature = "rtr-server")]
+pub mod rtr;

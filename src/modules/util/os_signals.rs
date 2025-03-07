@@ -1,10 +1,16 @@
 use tokio::select;
 use tokio::sync::broadcast;
-use crate::modules::explorer::CustomSignal;
 use crate::modules::util::BoxResult;
 
+
+#[derive(Debug, Clone)]
+pub enum CustomSignal {
+    Shutdown,
+    DataUpdate,
+}
+
 #[cfg(unix)]
-pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) -> BoxResult<()> {
+pub(in crate::modules) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) -> BoxResult<()> {
     use tokio::signal::unix::{signal, SignalKind};
     if let Ok(mut user1_signal) = signal(SignalKind::user_defined1()) {
         loop {
@@ -30,7 +36,7 @@ pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>
 }
 
 #[cfg(windows)]
-pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) -> BoxResult<()>{
+pub(in crate::modules) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) -> BoxResult<()>{
     select! {
             _ = terminate_signal() => {
                 sig_chan_tx.send(CustomSignal::Shutdown).unwrap();
@@ -40,7 +46,7 @@ pub(super) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>
 }
 
 #[cfg(unix)]
-pub(super) async fn terminate_signal() {
+pub(in crate::modules) async fn terminate_signal() {
     use tokio::signal::unix::{signal, SignalKind};
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
     let mut sigint = signal(SignalKind::interrupt()).unwrap();
@@ -51,7 +57,7 @@ pub(super) async fn terminate_signal() {
 }
 
 #[cfg(windows)]
-pub(super) async fn terminate_signal() {
+pub(in crate::modules) async fn terminate_signal() {
     use tokio::signal::windows::ctrl_c;
     let mut ctrl_c = ctrl_c().unwrap();
     let _ = ctrl_c.recv().await;

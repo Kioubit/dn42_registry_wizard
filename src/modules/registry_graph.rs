@@ -74,7 +74,7 @@ pub(crate) struct LinkIterator<'a, M: ExtraDataTrait, T: ObjectLine, L: LinkInfo
     backlinks: bool,
 }
 
-impl<'a, M: ExtraDataTrait, T: ObjectLine, L: LinkInfoType<T>> Iterator for LinkIterator<'a, M, T, L> {
+impl<M: ExtraDataTrait, T: ObjectLine, L: LinkInfoType<T>> Iterator for LinkIterator<'_, M, T, L> {
     type Item = (L, Rc<LinkedRegistryObject<M, T, L>>);
 
     fn next(&mut self) -> Option<Self::Item> {
