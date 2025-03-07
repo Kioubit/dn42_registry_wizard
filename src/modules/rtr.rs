@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
-use std::process::exit;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
@@ -15,7 +14,7 @@ use rpki::rtr::{
     state::State,
     PayloadRef, Timing,
 };
-use tokio::sync::broadcast::channel;
+use tokio::sync::broadcast;
 use tokio_stream::wrappers::TcpListenerStream;
 
 struct RecentItems<T> {
@@ -62,10 +61,9 @@ impl DataState {
 
     fn add_data(&self, new: Vec<RouteOrigin>) {
         let mut data = self.data.lock().unwrap();
-        let new_state = if let Some(latest_state) = data.latest().map(|x| x.clone().0) {
-            let mut s = latest_state.clone();
-            s.inc();
-            s
+        let new_state = if let Some(mut latest_state) = data.latest().map(|x| x.clone().0) {
+            latest_state.inc();
+            latest_state
         } else {
             State::new()
         };
@@ -76,12 +74,15 @@ impl DataState {
 #[derive(Clone)]
 struct VrpSource {
     data_state: Arc<DataState>,
-    timings: Timing
+    timings: Timing,
 }
 
 impl VrpSource {
     fn new(data_state: Arc<DataState>, timings: Timing) -> Self {
-        VrpSource { data_state, timings }
+        VrpSource {
+            data_state,
+            timings,
+        }
     }
 }
 
@@ -159,7 +160,6 @@ impl PayloadDiff for PayloadIterator {
                 // Check if this old entry exists in latest_data
                 let exists_in_latest = latest_origins.iter().any(|ro| ro == old_origin);
 
-
                 // If it doesn't exist in latest, it's a withdrawal
                 if !exists_in_latest {
                     return Some((PayloadRef::from(old_origin), Action::Withdraw));
@@ -221,7 +221,13 @@ impl PayloadSource for VrpSource {
     }
 }
 
-pub fn start_rtr(registry_root: impl AsRef<Path>, port: u16, refresh: u32, retry: u32, expire: u32) -> BoxResult<String> {
+pub fn start_rtr(
+    registry_root: impl AsRef<Path>,
+    port: u16,
+    refresh: u32,
+    retry: u32,
+    expire: u32,
+) -> BoxResult<String> {
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async move {
         let ds = Arc::new(DataState::new());
@@ -232,13 +238,16 @@ pub fn start_rtr(registry_root: impl AsRef<Path>, port: u16, refresh: u32, retry
             Ok(result) => ds.add_data(result),
         }
         let notify = NotifySender::new();
-        let vrp_source = VrpSource::new(ds.clone(),Timing {
-            refresh,
-            retry,
-            expire,
-        });
-        let (sig_chan_tx, mut sig_chan_rx) = channel::<CustomSignal>(1);
-        let signal_listener_handle = tokio::spawn(signal_listener(sig_chan_tx));
+        let vrp_source = VrpSource::new(
+            ds.clone(),
+            Timing {
+                refresh,
+                retry,
+                expire,
+            },
+        );
+        let (sig_chan_tx, mut sig_chan_rx) = broadcast::channel::<CustomSignal>(1);
+        let signal_listener_handle = tokio::spawn(signal_listener(sig_chan_tx.clone()));
 
         let registry_root = registry_root.as_ref().to_path_buf();
 
@@ -264,11 +273,10 @@ pub fn start_rtr(registry_root: impl AsRef<Path>, port: u16, refresh: u32, retry
                     }
                 }
             }
-            exit(0);
             Ok(())
         });
 
-        let server = tokio::spawn(server(notify, vrp_source, port));
+        let server = tokio::spawn(server(notify, vrp_source, port, sig_chan_tx.subscribe()));
         let result = tokio::try_join!(
             async { registry_data_updater.await? },
             async { server.await? },
@@ -282,14 +290,39 @@ pub fn start_rtr(registry_root: impl AsRef<Path>, port: u16, refresh: u32, retry
     Ok("".into())
 }
 
-async fn server(notify: NotifySender, vrp_source: VrpSource, port: u16) -> BoxResult<()> {
+async fn server(
+    notify: NotifySender,
+    vrp_source: VrpSource,
+    port: u16,
+    mut signal_rx: broadcast::Receiver<CustomSignal>,
+) -> BoxResult<()> {
     let addr = SocketAddr::from((IpAddr::from(Ipv6Addr::UNSPECIFIED), port));
     let listener = TcpListener::bind(&addr).await?;
-    println!("Listening on {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update", addr);
+    println!(
+        "Listening on {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update",
+        addr
+    );
     let listener_stream = TcpListenerStream::new(listener);
     let server = Server::new(listener_stream, notify, vrp_source);
-    server.run().await?;
-    Ok(())
+    let result = tokio::select! {
+        res = server.run() => {
+            if let Err(e) = res {
+                Err(format!("Server error: {}", e).into())
+            } else {
+                Ok(())
+            }
+        }
+        _ = async {
+            loop {
+                if let Ok(CustomSignal::Shutdown) = signal_rx.recv().await {
+                    break;
+                }
+            }
+        } => {
+            Ok(())
+        }
+    };
+    result
 }
 
 fn update_registry_data(registry_root: PathBuf) -> BoxResult<Vec<RouteOrigin>> {

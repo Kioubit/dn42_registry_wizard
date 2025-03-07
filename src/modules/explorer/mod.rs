@@ -75,7 +75,7 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
         .map_err(|x| format!("Error listening on TCP: {}", x))?;
     let app = Router::new()
         .route("/", get(handlers::root_handler))
-        .route("/*path", get(handlers::root_handler))
+        .route("/{*path}", get(handlers::root_handler))
         .route("/api/index/", get(handlers::index_handler))
         .route("/api/object/", get(handlers::get_object))
         .route("/api/roa/v4/", get(handlers::roa_handler_v4))
