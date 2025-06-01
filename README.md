@@ -27,3 +27,7 @@ Options:
 
 ### Build notes
 For the default build target, ``musl-gcc`` is required. (``musl`` package on Arch Linux)
+
+#### Building the ROA data generator separately
+Use ``cargo build -p roa_wizard`` to build only the roa data generation component.
+[More information](roa_wizard/README.md)

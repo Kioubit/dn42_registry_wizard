@@ -1,0 +1,18 @@
+[package]
+name = "roa_wizard"
+version = "0.1.10"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cidr-utils = "0.6.1"
+json = "0.12.4"
+
+[[bin]]
+name = "roa_wizard"
+path = "src/bin/main.rs"
+
+[lib]
+name = "roa_wizard_lib"
+path = "src/lib.rs"
