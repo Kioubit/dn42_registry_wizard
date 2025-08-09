@@ -116,7 +116,7 @@ impl PayloadSet for PayloadIterator {
 }
 
 impl PayloadDiff for PayloadIterator {
-    fn next(&mut self) -> Option<(PayloadRef, Action)> {
+    fn next(&'_ mut self) -> Option<(PayloadRef<'_>, Action)> {
         // Get references to the data vectors
         let latest_origins = &self.latest_data.1;
 

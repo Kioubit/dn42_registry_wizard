@@ -178,30 +178,31 @@ pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: 
     let mut last_obj_key: Option<String> = None;
     for (no, line) in lines.into_iter().enumerate() {
         let line = line?;
-        let split_result = line.split_once(':');
-        if !line.starts_with(' ') && split_result.is_some() {
-            let result = split_result.unwrap();
-            last_obj_key = None;
-            let obj_key = result.0.trim_end();
 
-            if let Some(ref f) = exclusive_fields {
-                if !f.contains(&obj_key.to_string()) {
-                    continue;
+        if let Some(result) = line.split_once(':') {
+            if !line.starts_with(' ') {
+                last_obj_key = None;
+                let obj_key = result.0.trim_end();
+
+                if let Some(ref f) = exclusive_fields {
+                    if !f.contains(&obj_key.to_string()) {
+                        continue;
+                    }
                 }
-            }
 
-            if let Some(ref f) = filtered_fields {
-                if f.contains(&obj_key.to_string()) {
-                    continue;
+                if let Some(ref f) = filtered_fields {
+                    if f.contains(&obj_key.to_string()) {
+                        continue;
+                    }
                 }
-            }
 
-            if !map.contains_key(obj_key) {
-                map.insert(obj_key.to_string(), Vec::new());
+                if !map.contains_key(obj_key) {
+                    map.insert(obj_key.to_string(), Vec::new());
+                }
+                let key = map.get_mut(obj_key).unwrap();
+                T::push_line(key, result.1.trim().to_string(), no);
+                last_obj_key = Some(obj_key.to_string());
             }
-            let key = map.get_mut(obj_key).unwrap();
-            T::push_line(key, result.1.trim().to_string(), no);
-            last_obj_key = Some(obj_key.to_string());
         } else if let Some(ref last_obj_key) = last_obj_key {
             // Handle multi-line
             let key = map.get_mut(last_obj_key).unwrap();

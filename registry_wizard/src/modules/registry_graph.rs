@@ -91,14 +91,14 @@ impl<M: ExtraDataTrait, T: ObjectLine, L: LinkInfoType<T>> Iterator for LinkIter
 }
 
 impl<M: ExtraDataTrait, T: ObjectLine, L: LinkInfoType<T>> LinkedRegistryObject<M, T, L> {
-    pub fn get_back_links(&self) -> LinkIterator<M, T, L> {
+    pub fn get_back_links(&'_ self) -> LinkIterator<'_, M, T, L> {
         LinkIterator {
             object: self,
             index: 0,
             backlinks: true,
         }
     }
-    pub fn get_forward_links(&self) -> LinkIterator<M, T, L> {
+    pub fn get_forward_links(&'_ self) -> LinkIterator<'_, M, T, L> {
         LinkIterator {
             object: self,
             index: 0,
