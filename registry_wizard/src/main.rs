@@ -45,7 +45,10 @@ fn main() {
                     output_result(modules::zone_files::output_forward_zones_legacy(&base_path, auth_servers));
                 }
                 Some(("tas", _)) => {
-                    output_result(modules::zone_files::output_tas(&base_path));
+                    output_result(modules::zone_files::output_tas(&base_path, false));
+                }
+                Some(("tas-yml", _)) => {
+                    output_result(modules::zone_files::output_tas(&base_path, true));
                 }
                 _ => unreachable!()
             }

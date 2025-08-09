@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::modules::object_reader;
 use crate::modules::object_reader::registry_objects_to_iter;
 use crate::modules::util::BoxResult;
@@ -80,19 +81,47 @@ pub fn output_forward_zones_legacy(registry_root: &Path, auth_servers: Vec<Strin
     Ok(output)
 }
 
-pub fn output_tas(registry_root: &Path) -> BoxResult<String> {
+pub fn output_tas(registry_root: &Path, yaml: bool) -> BoxResult<String> {
     let mut output = String::new();
     let objects = read_tld_objects(registry_root, false)
         .map_err(|e| format!("Error reading objects: {}", e))?;
-    for object in objects {
-        if object.ds_rdata.is_empty() {
-            output += format!("addNTA(\"{}\")\n", object.tld).as_str();
-            continue;
+
+    if yaml {
+        output += "dnssec:\n";
+        output += "  trustanchors:\n";
+
+        // Group ds-rdata by tld
+        let mut grouped: HashMap<&String, Vec<&String>> = HashMap::new();
+        for obj in objects.iter().filter(|x| !x.ds_rdata.is_empty()) {
+            grouped.entry(&obj.tld).or_default().extend(obj.ds_rdata.iter());
         }
-        for ta in object.ds_rdata {
-            output += format!("addTA('{}',\"{}\")\n", object.tld, ta).as_str();
+
+        for (tld, records) in grouped {
+            output += format!("    - name: {}", tld).as_str();
+            output += "      dsrecords:";
+            for record in records {
+                output += format!("      - {}", record).as_str();
+            }
         }
-    };
+
+        output += "  negative_trustanchors:\n";
+        for object in objects.iter().filter(|x| x.ds_rdata.is_empty()) {
+            output += format!("    - name: {}", object.tld).as_str();
+            output += format!("      reason: No known trust anchor for zone {}", object.tld).as_str();
+        }
+
+    } else {
+        for object in objects {
+            if object.ds_rdata.is_empty() {
+                output += format!("addNTA('{}','No known trust anchor for zone {}')\n", object.tld, object.tld).as_str();
+                continue;
+            }
+            for ta in object.ds_rdata {
+                output += format!("addTA('{}','{}')\n", object.tld, ta).as_str();
+            }
+        };
+    }
+
     Ok(output)
 }
 

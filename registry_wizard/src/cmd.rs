@@ -47,7 +47,8 @@ pub fn get_arg_matches() -> ArgMatches {
                                 .required(true)
                                 .num_args(1..)
                         ),
-                    Command::new("tas").about("Output trust anchors"),
+                    Command::new("tas").about("Output trust anchors (lua format)"),
+                    Command::new("tas-yml").about("Output trust anchors (yml format)"),
                 ]),
             Command::new("object_metadata")
                 .about("Object metadata output (JSON format)")
