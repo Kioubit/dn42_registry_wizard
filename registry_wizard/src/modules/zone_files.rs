@@ -97,17 +97,17 @@ pub fn output_tas(registry_root: &Path, yaml: bool) -> BoxResult<String> {
         }
 
         for (tld, records) in grouped {
-            output += format!("    - name: {}", tld).as_str();
-            output += "      dsrecords:";
+            output += format!("    - name: '{}'\n", tld).as_str();
+            output += "      dsrecords:\n";
             for record in records {
-                output += format!("      - {}", record).as_str();
+                output += format!("      - '{}'\n", record).as_str();
             }
         }
 
         output += "  negative_trustanchors:\n";
         for object in objects.iter().filter(|x| x.ds_rdata.is_empty()) {
-            output += format!("    - name: {}", object.tld).as_str();
-            output += format!("      reason: No known trust anchor for zone {}", object.tld).as_str();
+            output += format!("    - name: '{}'\n", object.tld).as_str();
+            output += format!("      reason: 'No known trust anchor for zone {}'\n", object.tld).as_str();
         }
 
     } else {
