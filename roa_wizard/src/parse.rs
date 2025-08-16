@@ -198,6 +198,7 @@ where
                 }
             }
 
+            self.origins.dedup();
 
             if self.prefix.is_none() {
                 return Err("missing route or route6 field in object")?;
