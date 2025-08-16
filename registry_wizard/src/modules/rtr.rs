@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
@@ -224,6 +225,7 @@ impl PayloadSource for VrpSource {
 pub fn start_rtr(
     registry_root: impl AsRef<Path>,
     port: u16,
+    bind_ip: Option<String>,
     refresh: u32,
     retry: u32,
     expire: u32,
@@ -276,7 +278,7 @@ pub fn start_rtr(
             Ok(())
         });
 
-        let server = tokio::spawn(server(notify, vrp_source, port, sig_chan_tx.subscribe()));
+        let server = tokio::spawn(server(notify, vrp_source, port, bind_ip, sig_chan_tx.subscribe()));
         let result = tokio::try_join!(
             async { registry_data_updater.await? },
             async { server.await? },
@@ -294,9 +296,16 @@ async fn server(
     notify: NotifySender,
     vrp_source: VrpSource,
     port: u16,
+    bind_ip: Option<String>,
     mut signal_rx: broadcast::Receiver<CustomSignal>,
 ) -> BoxResult<()> {
-    let addr = SocketAddr::from((IpAddr::from(Ipv6Addr::UNSPECIFIED), port));
+    let bind_ip = if let Some(bind_ip) = bind_ip {
+        IpAddr::from_str(bind_ip.as_str())?
+    } else {
+        IpAddr::from(Ipv6Addr::UNSPECIFIED)
+    };
+
+    let addr = SocketAddr::from((bind_ip, port));
     let listener = TcpListener::bind(&addr).await?;
     println!(
         "Listening on {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update",

@@ -144,7 +144,8 @@ fn main() {
             let refresh = *c.get_one::<u32>("refresh").unwrap();
             let retry = *c.get_one::<u32>("retry").unwrap();
             let expire = *c.get_one::<u32>("expire").unwrap();
-            let result = start_rtr(&base_path, port, refresh, retry, expire);
+            let bind_ip = c.get_one::<String>("bind-ip").cloned();
+            let result = start_rtr(&base_path, port, bind_ip, retry, expire, refresh);
             output_result(result);
         }
         Some(("remove", c)) => {

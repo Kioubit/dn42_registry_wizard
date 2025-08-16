@@ -161,6 +161,9 @@ pub fn get_arg_matches() -> ArgMatches {
                         .value_parser(clap::value_parser!(u16))
                         .default_value("9323")
                         .help("Port to listen on"),
+                    Arg::new("bind-ip")
+                        .long("bind")
+                        .help("IP address to bind to"),
                     Arg::new("refresh")
                         .long("refresh")
                         .value_parser(clap::value_parser!(u32))
