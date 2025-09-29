@@ -9,6 +9,7 @@ Commands:
   roa                    ROA file generation (various formats)
   dns                    DNS zone file and trust anchor generation (for use with PowerDNS)
   object_metadata        Object metadata output (JSON format)
+  object_finder          Find objects based on a search parameters
   graph                  Object output with forward and backlinks, path between objects, related objects (JSON / graphviz dot format)
   hierarchical_prefixes  Hierarchical prefix tree output (JSON format)
   explorer               Start web-based registry explorer (including a ROA file server)

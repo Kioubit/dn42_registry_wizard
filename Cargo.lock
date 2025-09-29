@@ -174,9 +174,9 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "bcder"
-version = "0.7.5"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89ffdaa8c6398acd07176317eb6c1f9082869dd1cc3fee7c72c6354866b928cc"
+checksum = "1f7c42c9913f68cf9390a225e81ad56a5c515347287eb98baa710090ca1de86d"
 dependencies = [
  "bytes",
  "smallvec",
@@ -939,7 +939,7 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "registry_wizard"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "axum",
  "bgpkit-parser",
@@ -982,9 +982,9 @@ dependencies = [
 
 [[package]]
 name = "rpki"
-version = "0.18.6"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98a043d99463db58c05283f5ae5d9ced858cc3483011747264e21f50b9201cdd"
+checksum = "c24608ac7e6ede3c152d887e7d3233a2bd2f2f463689049dfda365daa60a396e"
 dependencies = [
  "base64",
  "bcder",
