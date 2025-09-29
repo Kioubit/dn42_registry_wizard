@@ -69,6 +69,15 @@ pub fn get_arg_matches() -> ArgMatches {
                         .action(ArgAction::SetTrue)
                         .help("Don't output objects without keys (useful if filtering)"),
                 ]),
+            Command::new("object_finder")
+                .about("Find objects based on a search parameters")
+                .subcommand_required(true)
+                .subcommands([
+                    Command::new("ip").about("Find the smallest inetnum or inet6num containing an IP address")
+                        .args([
+                            Arg::new("address").help("The target IP address").required(true)
+                        ])
+                ]),
             Command::new("graph")
                 .about("Object output with forward and backlinks, path between objects, related objects (JSON / graphviz dot format)")
                 .subcommand_required(true)

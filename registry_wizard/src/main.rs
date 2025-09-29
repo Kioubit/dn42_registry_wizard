@@ -73,6 +73,15 @@ fn main() {
             );
             output_result(result)
         }
+        Some(("object_finder", c)) => {
+            match c.subcommand() {
+                Some(("ip", d)) => {
+                    let search_ip =  d.get_one::<String>("address").unwrap().clone();
+                    output_result(modules::object_finder::output(&base_path, &search_ip));
+                }
+                _ => unreachable!()
+            }
+        },
         Some(("graph", c)) => {
             match c.subcommand() {
                 Some(("list", c)) => {

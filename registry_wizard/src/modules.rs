@@ -13,3 +13,4 @@ pub mod registry_graph_tools;
 pub mod explorer;
 #[cfg(feature = "rtr-server")]
 pub mod rtr;
+pub mod object_finder;
