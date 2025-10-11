@@ -111,8 +111,18 @@ fn main() {
                     } else {
                         None
                     };
+                    let contain_value = if c.contains_id("contain_value") {
+                        Some(c.get_one::<String>("contain_value").unwrap().clone())
+                    } else {
+                        None
+                    };
+                    let not_contain_value = if c.contains_id("not_contain_value") {
+                        Some(c.get_one::<String>("not_contain_value").unwrap().clone())
+                    } else {
+                        None
+                    };
                     let graphviz = *c.get_one::<bool>("graphviz").unwrap();
-                    let result = modules::registry_graph_tools::output_related(&base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, graphviz);
+                    let result = modules::registry_graph_tools::output_related(&base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, not_contain_value, contain_value, graphviz);
                     output_result(result)
                 }
                 Some(("path", c)) => {

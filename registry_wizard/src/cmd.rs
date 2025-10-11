@@ -112,6 +112,12 @@ pub fn get_arg_matches() -> ArgMatches {
                                 .help("Only show objects that are maintained by the specified mnt or that are directly related")
                                 .long("related-mnt-by")
                                 .short('r'),
+                            Arg::new("contain_value")
+                                .help("Only output objects containing a specific value for any key")
+                                .long("contain-value"),
+                            Arg::new("not_contain_value")
+                                .help("Don't output objects containing a specific value for any key")
+                                .long("not-contain-value"),
                             Arg::new("graphviz")
                                 .help("Output graphviz dot")
                                 .long("graphviz")

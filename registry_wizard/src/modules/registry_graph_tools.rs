@@ -44,8 +44,10 @@ pub fn output_list(registry_root: &Path, obj_type: Option<String>, object_name: 
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn output_related(registry_root: &Path, obj_type: String,
                       obj_name: String, enforce_mnt_by: Option<String>, only_related_to_mnt: Option<String>,
+                      not_contain_value: Option<String>, contain_value: Option<String>,
                       graphviz: bool,
 ) -> BoxResult<String> {
     let schema = parse_registry_schema(registry_root, true)?;
@@ -80,6 +82,22 @@ pub fn output_related(registry_root: &Path, obj_type: String,
             }
             true
         });
+    }
+
+    if let Some(ref value) = not_contain_value {
+        visited.retain(|v| {
+            !v.object.key_value.values().any(|x| {
+                x.iter().any(|s| s.contains(value))
+            })
+        })
+    }
+
+    if let Some(ref value) = contain_value {
+        visited.retain(|v| {
+            v.object.key_value.values().any(|x| {
+                x.iter().any(|s| s.contains(value))
+            })
+        })
     }
 
     if graphviz {
