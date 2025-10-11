@@ -181,14 +181,25 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
         }
 
         let mut has_links = false;
+        let mut line_numbers = Vec::new();
         for link in item.get_forward_links() {
             if !link.1.extra.deleted.get() {
                 has_links = true;
                 continue;
             }
             // Deletion based on line number of link
-            output.push_str(&format!("sed '{}d' 'data/{}/{}'\n", link.0 +1, item.data_dir, item.object.filename));
+            line_numbers.push(link.0 + 1);
         }
+        if !line_numbers.is_empty() {
+            let line_string = line_numbers.iter().map(|x| {
+                let mut str = x.to_string();
+                str.push('d');
+                str
+            }).collect::<Vec<String>>().join(";");
+            output.push_str(&format!("sed -i '{}' 'data/{}/{}'\n", line_string, item.data_dir, item.object.filename));
+        }
+
+
         if !has_links {
             for link in item.get_back_links() {
                 if !link.1.extra.deleted.get() {
