@@ -1,15 +1,15 @@
 [package]
 name = "registry_wizard"
-version = "0.4.12"
+version = "0.4.13"
 edition = "2021"
 
 [dependencies]
 roa_wizard = { path = "../roa_wizard" }
 cidr-utils = "0.6.1"
-serde = { version = "1.0.219", features = ["derive", "rc"] }
-serde_json = "1.0.142"
+serde = { version = "1.0.228", features = ["derive", "rc"] }
+serde_json = "1.0.145"
 bgpkit-parser = { version = "0.11.1", default-features = false, features = ["parser", "oneio"] }
-rayon = "1.10.0"
+rayon = "1.11.0"
 clap = "4.5.48"
 dot = "0.1.4"
 
@@ -20,8 +20,8 @@ rust-embed = { version = "8.7.2", optional = true }
 mime_guess = { version = "2.0.5", optional = true }
 
 rpki = {version = "0.19.1", features = ["rtr", "crypto"], optional = true}
-tokio-stream = { version = "0.1" , features = ["net"], optional = true}
-futures-util = { version = "0.3", optional = true }
+tokio-stream = { version = "0.1.17" , features = ["net"], optional = true}
+futures-util = { version = "0.3.31", optional = true }
 
 [features]
 default = ["explorer", "rtr-server"]
