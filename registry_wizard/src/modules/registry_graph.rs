@@ -182,6 +182,7 @@ where
             // For each found schema key in the object (for instance mnt-by)
             for object_key_value in object_key_values.unwrap() {
                 // Get all 'lookup=' targets
+                let mut found_valid_category = false;
                 for possible_category in schema_link_targets {
                     let t_category = &object_list.get(possible_category);
                     if t_category.is_none() {
@@ -194,6 +195,7 @@ where
                     if target_object.is_none() {
                         continue;
                     }
+                    found_valid_category = true;
 
 
                     // -------- Add links to current object --------
@@ -229,6 +231,9 @@ where
                         }
                     }
                     // ----------------------------
+                }
+                if !found_valid_category  && !schema_link_targets.is_empty() {
+                    eprintln!("Warning: Invalid target object {} for {}, shema key: {}", object_key_value.get_line_value(), object.object.filename, schema_key);
                 }
             }
         }
