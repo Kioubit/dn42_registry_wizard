@@ -122,7 +122,8 @@ fn main() {
                         None
                     };
                     let graphviz = *c.get_one::<bool>("graphviz").unwrap();
-                    let result = modules::registry_graph_tools::output_related(&base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, not_contain_value, contain_value, graphviz);
+                    let no_cross_dn42_mnt = *c.get_one::<bool>("no_cross_dn42_mnt").unwrap();
+                    let result = modules::registry_graph_tools::output_related(&base_path, obj_type, obj_name, enforce_mnt_by, related_mnt_by, not_contain_value, contain_value, graphviz, no_cross_dn42_mnt);
                     output_result(result)
                 }
                 Some(("path", c)) => {

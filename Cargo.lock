@@ -947,7 +947,7 @@ checksum = "c3160422bbd54dd5ecfdca71e5fd59b7b8fe2b1697ab2baf64f6d05dcc66d298"
 
 [[package]]
 name = "registry_wizard"
-version = "0.4.13"
+version = "0.4.14"
 dependencies = [
  "axum",
  "bgpkit-parser",

@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
-use crate::modules::object_reader::SimpleObjectLine;
+use crate::modules::object_reader::{ObjectLine, SimpleObjectLine};
 
 pub fn output_list(registry_root: &Path, obj_type: Option<String>, object_name: Option<String>, graphviz: bool) -> BoxResult<String> {
     let registry_schema = parse_registry_schema(registry_root, true)?;
@@ -48,7 +48,7 @@ pub fn output_list(registry_root: &Path, obj_type: Option<String>, object_name: 
 pub fn output_related(registry_root: &Path, obj_type: String,
                       obj_name: String, enforce_mnt_by: Option<String>, only_related_to_mnt: Option<String>,
                       not_contain_value: Option<String>, contain_value: Option<String>,
-                      graphviz: bool,
+                      graphviz: bool, no_cross_dn42_mnt: bool,
 ) -> BoxResult<String> {
     let schema = parse_registry_schema(registry_root, true)?;
     let graph = create_registry_graph::<(), SimpleObjectLine, LinkInfoSchemaKey>(registry_root, &schema, false, false)?;
@@ -62,6 +62,11 @@ pub fn output_related(registry_root: &Path, obj_type: String,
     to_visit.push(t_obj.clone());
     while let Some(obj) = to_visit.pop() {
         if WEAKLY_REFERENCING.contains(&obj.schema_ref.as_str()) {
+            continue;
+        }
+
+        if no_cross_dn42_mnt && let Some(m) = obj.object.key_value.get("mnt-by")
+            && m.iter().any(|x| x.get_line_value() == "DN42-MNT") {
             continue;
         }
         if let Some(ref target) = only_related_to_mnt

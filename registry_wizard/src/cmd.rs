@@ -123,6 +123,10 @@ pub fn get_arg_matches() -> ArgMatches {
                                 .long("graphviz")
                                 .short('g')
                                 .action(ArgAction::SetTrue),
+                            Arg::new("no_cross_dn42_mnt")
+                                .help("Don't cross DN42-MNT")
+                                .long("no-cross-dn42-mnt")
+                                .action(ArgAction::SetTrue),
                         ])
                         .group(ArgGroup::new("input_group")
                             .args(["enforce_mnt_by", "related_mnt_by"])
