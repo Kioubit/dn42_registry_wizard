@@ -184,16 +184,14 @@ pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: 
                 last_obj_key = None;
                 let obj_key = result.0.trim_end();
 
-                if let Some(ref f) = exclusive_fields {
-                    if !f.contains(&obj_key.to_string()) {
-                        continue;
-                    }
+                if let Some(f) = exclusive_fields
+                    && !f.contains(&obj_key.to_string()) {
+                       continue;
                 }
 
-                if let Some(ref f) = filtered_fields {
-                    if f.contains(&obj_key.to_string()) {
-                        continue;
-                    }
+                if let Some(f) = filtered_fields
+                    && f.contains(&obj_key.to_string()) {
+                    continue;
                 }
 
                 if !map.contains_key(obj_key) {

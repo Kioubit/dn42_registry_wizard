@@ -1,7 +1,7 @@
 [package]
 name = "registry_wizard"
 version = "0.4.13"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 roa_wizard = { path = "../roa_wizard" }

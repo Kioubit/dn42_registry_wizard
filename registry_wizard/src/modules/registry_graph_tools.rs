@@ -64,21 +64,19 @@ pub fn output_related(registry_root: &Path, obj_type: String,
         if WEAKLY_REFERENCING.contains(&obj.schema_ref.as_str()) {
             continue;
         }
-        if let Some(ref target) = only_related_to_mnt {
-            if let Some(m) = obj.object.key_value.get("mnt-by") {
-                if m.iter().any(|x| x != target) {
-                    continue;
-                }
-            }
+        if let Some(ref target) = only_related_to_mnt
+            && let Some(m) = obj.object.key_value.get("mnt-by")
+            && m.iter().any(|x| x != target) {
+            continue;
         }
+
         link_visit(&obj, &mut visited, &mut to_visit);
     }
     if let Some(ref target) = enforce_mnt_by {
         visited.retain(|v| {
-            if let Some(m) = v.object.key_value.get("mnt-by") {
-                if m.iter().any(|x| x != target) {
-                    return false;
-                }
+            if let Some(m) = v.object.key_value.get("mnt-by")
+                && m.iter().any(|x| x != target) {
+                return false;
             }
             true
         });

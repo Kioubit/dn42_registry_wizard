@@ -126,10 +126,12 @@ pub struct RouteObject {
 
 impl RouteObject {
     pub fn get_bird_format(self) -> String {
-        let mut result: String = "".to_owned();
+        let mut result = String::new();
+        let prefix = self.get_prefix_string();
+        let max_length = self.max_length.get().unwrap();
         for origin in &self.origins {
-            result.push_str(&format!("route {prefix} max {max_length} as {origin};\n", prefix = self.get_prefix_string(),
-                                     max_length = self.max_length.get().unwrap(), origin = origin));
+            result.push_str(&format!("route {prefix} max {max_length} as {origin};\n", prefix = prefix,
+                                     max_length = max_length, origin = origin));
         }
         result
     }

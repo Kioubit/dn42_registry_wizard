@@ -39,20 +39,19 @@ pub fn generate_json(base_path: impl AsRef<Path>) -> BoxResult<(String, Warnings
 pub fn get_roa_objects(is_v6: bool, base_path: PathBuf) -> BoxResult<RouteObjectsWithWarnings> {
     let route_directory: PathBuf;
     let filter_txt: PathBuf;
-    match is_v6 {
-        true => {
-            let route6_directory = base_path.join("data/route6/");
-            let filter6_txt = base_path.join("data/filter6.txt");
-            route_directory = route6_directory;
-            filter_txt = filter6_txt;
-        }
-        false => {
-            let route4_directory = base_path.join("data/route/");
-            let filter4_txt = base_path.join("data/filter.txt");
-            route_directory = route4_directory;
-            filter_txt = filter4_txt;
-        }
+    if is_v6 {
+        let route6_directory = base_path.join("data/route6/");
+        let filter6_txt = base_path.join("data/filter6.txt");
+        route_directory = route6_directory;
+        filter_txt = filter6_txt;
+    } else {
+        let route4_directory = base_path.join("data/route/");
+        let filter4_txt = base_path.join("data/filter.txt");
+        route_directory = route4_directory;
+        filter_txt = filter4_txt;
     }
+
+
     let (mut objects, mut warnings) = read_route_objects(route_directory, is_v6)?;
     let (filters, mut warnings_filter) = read_filter_set(&filter_txt)?;
     warnings.append(&mut warnings_filter);

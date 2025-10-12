@@ -7,9 +7,8 @@ use std::time::SystemTime;
 pub fn output_bird(objects: Vec<RouteObject>, base_path: &Path) -> String {
     let mut result = format!("# {} {} - Kioubit.dn42\n", crate::PACKAGE_NAME, crate::VERSION);
     result.push_str(&format!("# Created: {}\n", get_sys_time_in_secs()));
-    let commit_hash = get_git_commit_hash(base_path);
-    if commit_hash.is_some() {
-        result.push_str(&format!("# Commit: {}\n", commit_hash.unwrap()));
+    if let Some(commit_hash) = get_git_commit_hash(base_path) {
+        result.push_str(&format!("# Commit: {}\n", commit_hash));
     }
     for object in objects {
         result.push_str(&object.get_bird_format());

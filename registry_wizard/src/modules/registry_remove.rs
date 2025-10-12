@@ -281,13 +281,12 @@ pub fn output(registry_root: &Path, data_input: EitherOr<String, String>,
                 graph_has_asn = true;
                 break;
             }
-            
-            if let Some(m) =  obj.object.key_value.get("mnt-by") {
-                if m.iter().any(|m| m.1 == "DN42-MNT") {
-                    // Skip sub-graphs containing DN42-MNT
-                    graph_has_asn = true;
-                    break;
-                }
+
+            if let Some(m) =  obj.object.key_value.get("mnt-by")
+                && m.iter().any(|m| m.1 == "DN42-MNT") {
+                // Skip sub-graphs containing DN42-MNT
+                graph_has_asn = true;
+                break;
             }
 
             link_visit(&obj, &mut visited, &mut to_visit);
