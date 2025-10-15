@@ -153,6 +153,8 @@ async function display_object(object_type, object_name, no_set_search) {
         set_page_state("object");
         return;
     }
+    last_displayed_object = provided_obj_path;
+
     set_page_state("wait");
     tableBody.innerHTML = "";
     backLinkDisplay.innerHTML = "";
@@ -169,7 +171,6 @@ async function display_object(object_type, object_name, no_set_search) {
         errorDisplayDiv.innerText = "Error fetching object";
         return;
     }
-    last_displayed_object = provided_obj_path;
 
     const name = get_object_path(response["category"], response["object"]["filename"]);
 
@@ -177,7 +178,7 @@ async function display_object(object_type, object_name, no_set_search) {
         searchBox.value = name;
     }
     dataTitleDisplay.innerText = name;
-    dataTitleDisplay.href = `#/${name}`
+    dataTitleDisplay.href = `#/${name}`;
     dataTitleDisplay.onclick = (ev) => {
         ev.preventDefault();
         searchBox.value = name;
@@ -450,7 +451,7 @@ moreInfoLink.onclick = async () => {
     infoDialog.showModal();
     close.onclick = () => {
         infoDialog.close();
-    }
+    };
     await fetch_index();
     const with_roa = info["roa"];
     inner.innerText = `Registry git commit hash: ${info["commit"]}\nGeneration time: ${info["time"]}\nROA data generation enabled: ${with_roa}`;
