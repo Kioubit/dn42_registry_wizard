@@ -1,13 +1,13 @@
-const dataDisplayDiv = document.getElementById('dataDisplayDiv');
-const tableBody = document.getElementById('dataTableBody');
-const dataTitleDisplay = document.getElementById('dataTitleDisplay');
-const waitDiv = document.getElementById('waitDiv');
-const backLinkDisplay = document.getElementById('backLinkDisplay');
-const searchDisplayDiv = document.getElementById('searchDisplayDiv');
-const searchBox = document.getElementById('searchBox');
-const statDisplayDiv = document.getElementById('statDisplayDiv');
-const statDisplayInner = document.getElementById('statDisplayInner');
-const errorDisplayDiv = document.getElementById('errorDisplayDiv');
+const dataDisplayDiv = document.getElementById("dataDisplayDiv");
+const tableBody = document.getElementById("dataTableBody");
+const dataTitleDisplay = document.getElementById("dataTitleDisplay");
+const waitDiv = document.getElementById("waitDiv");
+const backLinkDisplay = document.getElementById("backLinkDisplay");
+const searchDisplayDiv = document.getElementById("searchDisplayDiv");
+const searchBox = document.getElementById("searchBox");
+const statDisplayDiv = document.getElementById("statDisplayDiv");
+const statDisplayInner = document.getElementById("statDisplayInner");
+const errorDisplayDiv = document.getElementById("errorDisplayDiv");
 const moreInfoLink = document.getElementById("moreInfoLink");
 const infoDialog = document.getElementById("infoDialog");
 
@@ -15,11 +15,11 @@ let index = null;
 let info = null;
 
 async function fetch_index() {
-    if (index != null) {
+    if (index !== null) {
         return;
     }
     try {
-        let response = await fetch('api/index/');
+        const response = await fetch("api/index/");
         const json = await response.json();
         info = json["i"];
         index = json["d"];
@@ -105,8 +105,8 @@ async function perform_search(query) {
     } else if (result_count === 0) {
         searchDisplayDiv.innerText = "No results";
     }
-    expectedWindowHash = "?" + orig_query;
-    window.location.hash = "?" + orig_query;
+    expectedWindowHash = `?${orig_query}`;
+    window.location.hash = `?${orig_query}`;
 }
 
 function append_search_result(object_type, object_name) {
@@ -132,9 +132,7 @@ function* filter_results(search_category, query) {
         if (search_category !== "" && category[0] !== search_category) {
             continue;
         }
-        const filtered = category[1].filter((d) => {
-            return d.toUpperCase().includes(query);
-        });
+        const filtered = category[1].filter((d) => d.toUpperCase().includes(query));
         for (const result of filtered) {
             yield [category[0], result];
         }
@@ -145,9 +143,9 @@ let last_displayed_object = "";
 
 async function display_object(object_type, object_name, no_set_search) {
     const provided_obj_path = get_object_path(object_type, object_name);
-    expectedWindowHash = "/" + provided_obj_path;
-    if (window.location.hash !== ("#/" + provided_obj_path)) {
-        window.location.hash = "/" + provided_obj_path;
+    expectedWindowHash = `/${provided_obj_path}`;
+    if (window.location.hash !== `#/${provided_obj_path}`) {
+        window.location.hash = `/${provided_obj_path}`;
     }
     if (last_displayed_object === provided_obj_path) {
         set_page_state("object");
@@ -164,7 +162,7 @@ async function display_object(object_type, object_name, no_set_search) {
     params.set("type", object_type);
     let response = null;
     try {
-        response = await (await fetch('api/object/?' + params.toString())).json();
+        response = await (await fetch("api/object/?" + params.toString())).json();
     } catch (e) {
         console.log(e);
         set_page_state("error");
@@ -187,14 +185,14 @@ async function display_object(object_type, object_name, no_set_search) {
     const forward_links = response["forward_links"];
     const back_links = response["back_links"];
     const combined = Object.entries(key_value).flatMap(([key, entries]) =>
-        entries.map(entry => ({type: key, value: entry}))
+        entries.map((entry) => ({"type": key, "value": entry}))
     );
     combined.sort((a, b) => a.value[0] - b.value[0]);
     for (const entry of combined) {
-        let {type: key, value: [_, value]} = entry;
-        const trElem = document.createElement('tr');
-        const tdElemKey = document.createElement('td');
-        const tdElemValue = document.createElement('td');
+        let {"type": key, "value": [_, value]} = entry;
+        const trElem = document.createElement("tr");
+        const tdElemKey = document.createElement("td");
+        const tdElemValue = document.createElement("td");
         tdElemKey.innerText = key;
         let found_link = false;
         const line_no = entry.value[0];
@@ -204,7 +202,7 @@ async function display_object(object_type, object_name, no_set_search) {
                 continue;
             }
             found_link = true;
-            let [a, b] = link_target.split("/");
+            const [a, b] = link_target.split("/");
             const link_elem = document.createElement("a");
             if (a === object_type && b === object_name) {
                 // link to self
@@ -310,9 +308,7 @@ function* getBackLinks(back_links) {
 
 async function get_stats() {
     await fetch_index();
-    const entries = Object.entries(index).sort((a, b) => {
-        return a[0].localeCompare(b[0]);
-    });
+    const entries = Object.entries(index).sort((a, b) => a[0].localeCompare(b[0]));
     for (const category of entries) {
         const elem = document.createElement("div");
         const href = document.createElement("a");
@@ -369,6 +365,8 @@ function set_page_state(state) {
             statDisplayDiv.classList.add("noDisplay");
             errorDisplayDiv.classList.remove("noDisplay");
             break;
+        default:
+            set_page_state("error");
     }
 }
 
@@ -411,7 +409,7 @@ async function handle_window_hash() {
 async function navigate_to_window_hash(target) {
     set_page_state("wait");
     await fetch_index();
-    let [a, b] = target.split("/");
+    const [a, b] = target.split("/");
     let found = false;
     for (const category of Object.entries(index)) {
         if (category[0] === a) {
@@ -435,7 +433,7 @@ async function navigate_to_window_hash(target) {
 
 let searchTimeout = null;
 searchBox.oninput = () => {
-    if (searchTimeout != null) {
+    if (searchTimeout !== null) {
         clearTimeout(searchTimeout);
     }
     searchTimeout = setTimeout(() => {
@@ -455,12 +453,12 @@ moreInfoLink.onclick = async () => {
     await fetch_index();
     const with_roa = info["roa"];
     inner.innerText = `Registry git commit hash: ${info["commit"]}\nGeneration time: ${info["time"]}\nROA data generation enabled: ${with_roa}`;
-    if (!with_roa) {
-        inner_additional.classList.add("noDisplay");
-    } else {
+    if (with_roa) {
         inner_additional.classList.remove("noDisplay");
+    } else {
+        inner_additional.classList.add("noDisplay");
     }
-}
+};
 
 (async function main() {
     await get_stats();
