@@ -251,9 +251,10 @@ where
         let filename = file.as_path().file_name().unwrap_or_default().to_str().unwrap_or_default().to_owned();
         let mut object = RouteObjectBuilder::new(filename.to_owned());
         for line in lines {
-            if let Some(result) = line.map_err(|e|
+            let line = line.map_err(|e|
                 format!("Unable to read file line {}: {}", file.display(), e)
-            )?.split_once(':') {
+            )?;
+            if !line.starts_with(' ') && let Some(result) = line.split_once(':') {
                 match result.0.trim_end() {
                     "route" => { object.prefix = Some(result.1.trim().to_owned()) }
                     "route6" => { object.prefix = Some(result.1.trim().to_owned()) }

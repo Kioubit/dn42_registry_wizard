@@ -179,7 +179,7 @@ pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: 
     for (no, line) in lines.into_iter().enumerate() {
         let line = line?;
 
-        if let Some(result) = line.split_once(':') && !line.starts_with(' ') {
+        if !line.starts_with(' ') && let Some(result) = line.split_once(':') {
             last_obj_key = None;
             let obj_key = result.0.trim_end();
 
