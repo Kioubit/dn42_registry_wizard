@@ -162,7 +162,7 @@ where
             }
 
             for origin in &mut self.origins {
-                let clean_origin = origin.strip_prefix("AS").ok_or("Invalid origin filed")?;
+                let clean_origin = origin.strip_prefix("AS").ok_or("Invalid origin field")?;
                 if !clean_origin.chars().all(char::is_numeric) {
                     return Err(format!("Invalid origin field: {}", origin).into());
                 }
@@ -225,7 +225,7 @@ where
                 format!("Unable to read file line {}: {}", file.display(), e)
             )?;
             if !line.starts_with(' ') && let Some((key,value)) = line.split_once(':') {
-                let val = value.trim_end().to_owned();
+                let val = value.trim().to_owned();
                 match key.trim_end() {
                     "route" | "route6" => { object.prefix = Some(val) }
                     "origin" => { object.origins.push(val) }
