@@ -1,106 +1,83 @@
-use std::cell::Cell;
-use std::fs::{File, read_dir};
+use crate::{BoxResult, RouteObjectsWithWarnings};
+use cidr_utils::cidr::IpCidr;
+use json::JsonValue;
+use std::fs::{read_dir, File};
 use std::io;
 use std::io::BufRead;
 use std::path::Path;
 use std::str::FromStr;
-use cidr_utils::cidr::IpCidr;
-use json::JsonValue;
-use crate::{BoxResult, RouteObjectsWithWarnings};
-
-
-pub fn evaluate_filter_set(object_list: &mut Vec<RouteObject>, filter_set: &[FilterSet]) {
-    object_list.retain(|v| {
-        let mut filter_set_iter = filter_set.iter();
-        let mut bits: u8 = 0;
-        let applicable_filter_set = filter_set_iter.find(|f| {
-            if f.prefix.contains(&v.prefix.first_address()) && f.prefix.contains(&v.prefix.last_address()) {
-                bits = v.prefix.network_length();
-                return true;
-            }
-            false
-        });
-
-
-        if applicable_filter_set.is_none() {
-            return false;
-        }
-
-        if !applicable_filter_set.unwrap().allow {
-            return false;
-        }
-
-        let filter_max_length = applicable_filter_set.unwrap().max_len;
-        let filter_min_length = applicable_filter_set.unwrap().min_len;
-        let applicable_max_length: i32;
-
-
-        if let Some(mut obj_max_length) = v.max_length.get() {
-            if obj_max_length > filter_max_length {
-                obj_max_length = filter_max_length;
-                v.max_length.set(Some(filter_max_length));
-            }
-            if obj_max_length < filter_min_length {
-                obj_max_length = filter_min_length;
-                v.max_length.set(Some(filter_min_length));
-            }
-            applicable_max_length = obj_max_length;
-        } else {
-            v.max_length.set(Some(filter_max_length));
-            applicable_max_length = filter_max_length;
-        }
-
-        if (bits as i32) > applicable_max_length {
-            return false;
-        }
-        true
-    })
-}
 
 
 #[derive(Debug)]
-pub struct FilterSet {
-    priority: i32,
+pub struct Filter {
+    priority: u32,
     allow: bool,
     prefix: IpCidr,
-    min_len: i32,
-    max_len: i32,
+    min_len: u8,
+    max_len: u8,
 }
 
-impl FilterSet {
-    fn new(priority: Option<&str>, allow: Option<&str>, prefix: Option<&str>, min_len: Option<&str>, max_len: Option<&str>) -> BoxResult<Self> {
-        let result = Self {
-            priority: priority.ok_or("priority value missing")?.parse::<i32>().ok().ok_or("Failed to parse priority as i32")?,
-            allow: allow.ok_or("allow value missing")? == "permit",
-            prefix: IpCidr::from_str(prefix.ok_or("invalid prefix")?).ok().ok_or("Failed to parse prefix")?,
-            min_len: min_len.ok_or("min_len value missing")?.parse::<i32>().ok().ok_or("Failed to parse min_length as i32")?,
-            max_len: max_len.ok_or("max_len value missing")?.parse::<i32>().ok().ok_or("Failed to parse max_length as i32")?,
-        };
-        Ok(result)
+impl Filter {
+    fn from_tokens(tokens: &[&str]) -> BoxResult<Self> {
+        if tokens.len() < 5 {
+            return Err("Insufficient columns".into());
+        }
+        Ok(Self {
+            priority: tokens[0].parse().map_err(|_| "Failed to parse priority")?,
+            allow: tokens[1] == "permit",
+            prefix: IpCidr::from_str(tokens[2]).map_err(|_| "Invalid CIDR")?,
+            min_len: tokens[3].parse().map_err(|_| "Failed to parse min_len")?,
+            max_len: tokens[4].parse().map_err(|_| "Failed to parse max_len")?,
+        })
     }
 }
 
-pub fn read_filter_set(file: &Path) -> BoxResult<(Vec<FilterSet>, Vec<String>)> {
+
+pub fn evaluate_filter_set(object_list: &mut Vec<RouteObject>, filter_set: &[Filter]) {
+    object_list.retain_mut(|v| {
+        let mut filter_set_iter = filter_set.iter();
+        let bits: u8 = v.prefix.network_length();
+
+        let applicable_filter_set = filter_set_iter.find(|f| {
+            f.prefix.contains(&v.prefix.first_address()) && f.prefix.contains(&v.prefix.last_address())
+        });
+
+        match applicable_filter_set {
+            None => false,
+            Some(filter) => {
+                if !filter.allow {
+                    return false;
+                }
+
+                let new_max = if let Some(current_max) = v.max_length {
+                    current_max.clamp(filter.min_len, filter.max_len)
+                } else {
+                    filter.max_len
+                };
+
+                v.max_length = Some(new_max);
+
+                bits <= new_max
+            }
+        }
+    })
+}
+
+pub fn read_filter_set(file: &Path) -> BoxResult<(Vec<Filter>, Vec<String>)> {
     let mut warnings: Vec<String> = Vec::new();
-    let mut set: Vec<FilterSet> = Vec::new();
+    let mut set: Vec<Filter> = Vec::new();
     let lines = read_lines(file).map_err(|e|
-        format!("Error reading filter set file: {}", e)
+        format!("Error reading filter file: {}", e)
     )?;
     for line_result in lines {
         let line = line_result.map_err(|e|
-            format!("Error reading filter set line: {}", e)
+            format!("Error reading filter line: {}", e)
         )?;
         if line.starts_with('#') || line.is_empty() {
             continue;
         }
-        let mut entries_iter = line.split_whitespace();
-        let priority = entries_iter.next();
-        let allow = entries_iter.next();
-        let prefix = entries_iter.next();
-        let min_len = entries_iter.next();
-        let max_len = entries_iter.next();
-
-        let result = FilterSet::new(priority, allow, prefix, min_len, max_len);
+        let entries = line.split_whitespace().collect::<Vec<&str>>();
+        let result = Filter::from_tokens(entries.as_slice());
         match result {
             Ok(r) => {
                 set.push(r)
@@ -121,14 +98,14 @@ pub fn read_filter_set(file: &Path) -> BoxResult<(Vec<FilterSet>, Vec<String>)> 
 pub struct RouteObject {
     pub prefix: IpCidr,
     pub origins: Vec<String>,
-    pub max_length: Cell<Option<i32>>,
+    pub max_length: Option<u8>,
 }
 
 impl RouteObject {
     pub fn get_bird_format(self) -> String {
         let mut result = String::new();
         let prefix = self.get_prefix_string();
-        let max_length = self.max_length.get().unwrap();
+        let max_length = self.max_length.unwrap();
         for origin in &self.origins {
             result.push_str(&format!("route {prefix} max {max_length} as {origin};\n", prefix = prefix,
                                      max_length = max_length, origin = origin));
@@ -140,7 +117,7 @@ impl RouteObject {
         for origin in &self.origins {
             let mut data = JsonValue::new_object();
             data["prefix"] = self.get_prefix_string().into();
-            data["maxLength"] = self.max_length.get().unwrap().into();
+            data["maxLength"] = self.max_length.unwrap().into();
             data["asn"] = origin.to_owned().into();
             result.push(data);
         }
@@ -184,22 +161,15 @@ where
                 return Err("missing origin field in object")?;
             }
 
-            for origin in &self.origins {
-                if !origin.starts_with("AS") {
-                    return Err("Invalid origin field")?;
+            for origin in &mut self.origins {
+                let clean_origin = origin.strip_prefix("AS").ok_or("Invalid origin filed")?;
+                if !clean_origin.chars().all(char::is_numeric) {
+                    return Err(format!("Invalid origin field: {}", origin).into());
                 }
+                *origin = clean_origin.to_string();
             }
 
-            self.origins.iter_mut().for_each(|x| {
-                *x = x.replace("AS", "");
-            });
-
-            for origin in &self.origins {
-                if !origin.chars().all(char::is_numeric) {
-                    return Err("Invalid origin field")?;
-                }
-            }
-
+            self.origins.sort_unstable();
             self.origins.dedup();
 
             if self.prefix.is_none() {
@@ -220,17 +190,17 @@ where
 
 
             let max_length = self.max_length.map_or(Ok(None), |s|
-                if let Ok(parsed) = s.parse::<i32>() {
+                if let Ok(parsed) = s.parse::<u8>() {
                     Ok(Some(parsed))
                 } else {
-                    Err("Failed to parse max_length value as i32")
+                    Err("Failed to parse max_length value as u8")
                 },
             )?;
 
             let result = RouteObject {
                 prefix,
                 origins: self.origins,
-                max_length: Cell::new(max_length),
+                max_length,
             };
             Ok(result)
         }
@@ -254,12 +224,12 @@ where
             let line = line.map_err(|e|
                 format!("Unable to read file line {}: {}", file.display(), e)
             )?;
-            if !line.starts_with(' ') && let Some(result) = line.split_once(':') {
-                match result.0.trim_end() {
-                    "route" => { object.prefix = Some(result.1.trim().to_owned()) }
-                    "route6" => { object.prefix = Some(result.1.trim().to_owned()) }
-                    "origin" => { object.origins.push(result.1.trim().to_owned()) }
-                    "max-length" => { object.max_length = Some(result.1.trim().to_owned()) }
+            if !line.starts_with(' ') && let Some((key,value)) = line.split_once(':') {
+                let val = value.trim_end().to_owned();
+                match key.trim_end() {
+                    "route" | "route6" => { object.prefix = Some(val) }
+                    "origin" => { object.origins.push(val) }
+                    "max-length" => { object.max_length = Some(val) }
                     &_ => {}
                 }
             }

@@ -347,7 +347,7 @@ fn update_registry_data(registry_root: PathBuf) -> BoxResult<Vec<RouteOrigin>> {
         let ip_addr = item.prefix.first_address();
         let prefix_length = item.prefix.network_length();
         let prefix = Prefix::new(ip_addr, prefix_length)?;
-        let max_len_prefix = MaxLenPrefix::new(prefix, Some(item.max_length.get().unwrap() as u8))?;
+        let max_len_prefix = MaxLenPrefix::new(prefix, Some(item.max_length.unwrap()))?;
         for origin in &item.origins {
             let asn = Asn::from_u32(origin.parse()?);
             result.push(RouteOrigin {
