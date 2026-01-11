@@ -1,11 +1,11 @@
 use crate::modules::util::BoxResult;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::read_dir;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use serde::ser::SerializeMap;
 use crate::modules::util;
 
 pub(in crate::modules) trait ObjectLine: Debug + Serialize + Clone {
@@ -23,8 +23,44 @@ pub(in crate::modules) struct RegistryObject<T>
 where
     T: ObjectLine,
 {
-    pub key_value: HashMap<String, Vec<T>>,
+    pub key_value: KeyValue<T>,
     pub filename: String,
+}
+#[derive(Debug, Clone)]
+pub struct KeyValue<T>(pub Vec<(String, Vec<T>)>);
+impl<T> KeyValue<T> {
+    pub fn get(&self, key: &str) -> Option<&Vec<T>> {
+        self.0.iter().find(|(x, _)| x == key).map(|(_, v)| v)
+    }
+    fn get_mut(&mut self, key: &str) -> Option<&mut Vec<T>> {
+        self.0.iter_mut().find(|(x, _)| x == key).map(|(_, v)| v)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &Vec<T>> {
+        self.0.iter().map(|(_, v)| v)
+    }
+}
+
+impl<T> Default for KeyValue<T> {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+impl<T: Serialize> Serialize for KeyValue<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (k, v) in &self.0 {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
+    }
 }
 
 pub(in crate::modules) struct RegistryObjectIterator<T: ObjectLine> {
@@ -124,7 +160,7 @@ pub(in crate::modules) fn read_registry_objects<T: ObjectLine>(registry_root: &P
 
     for path in paths {
         let map = if enumerate_only {
-            HashMap::<String, Vec<T>>::new()
+            Default::default()
         } else {
             read_registry_object_kv(&path.1)?
         };
@@ -138,7 +174,7 @@ pub(in crate::modules) fn read_registry_objects<T: ObjectLine>(registry_root: &P
     Ok(objects)
 }
 
-pub(in crate::modules) fn read_registry_object_kv<T: ObjectLine>(path: &Path) -> BoxResult<HashMap<String, Vec<T>>> {
+pub(in crate::modules) fn read_registry_object_kv<T: ObjectLine>(path: &Path) -> BoxResult<KeyValue<T>> {
     read_registry_object_kv_filtered(path, &None, &None)
 }
 
@@ -172,8 +208,8 @@ impl ObjectLine for OrderedObjectLine {
 
 pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: &Path, exclusive_fields: &Option<Vec<String>>,
                                                                           filtered_fields: &Option<Vec<String>>)
-                                                                          -> BoxResult<HashMap<String, Vec<T>>> {
-    let mut map: HashMap<String, Vec<T>> = HashMap::new();
+                                                                          -> BoxResult<KeyValue<T>> {
+    let mut map : KeyValue<T> = Default::default();
     let lines = util::read_lines(path)?;
     let mut last_obj_key: Option<String> = None;
     for (no, line) in lines.into_iter().enumerate() {
@@ -193,8 +229,9 @@ pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: 
                 continue;
             }
 
-            if !map.contains_key(obj_key) {
-                map.insert(obj_key.to_string(), Vec::new());
+
+            if map.get_mut(obj_key).is_none() {
+                map.0.push((obj_key.to_string(), Vec::new()));
             }
             let key = map.get_mut(obj_key).unwrap();
             T::push_line(key, result.1.trim().to_string(), no);
@@ -210,10 +247,4 @@ pub(in crate::modules) fn read_registry_object_kv_filtered<T: ObjectLine>(path: 
     }
 
     Ok(map)
-}
-
-
-#[allow(dead_code)]
-pub(in crate::modules) fn filter_objects_source(objects: &mut Vec<RegistryObject<SimpleObjectLine>>, source: String) {
-    objects.retain(|obj| obj.key_value.get("source").is_some_and(|x| x.first() == Some(&source)));
 }
