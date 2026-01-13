@@ -335,15 +335,13 @@ async fn server(
 }
 
 fn update_registry_data(registry_root: PathBuf) -> BoxResult<Vec<RouteOrigin>> {
-    let roa4 = roa_wizard_lib::get_roa_objects(false, registry_root.clone())
-        .map_err(|x| format!("Error generating roa4: {:?}", x))
-        .map(|x| x.0)?;
-    let roa6 = roa_wizard_lib::get_roa_objects(true, registry_root.clone())
-        .map_err(|x| format!("Error generating roa6: {:?}", x))
-        .map(|x| x.0)?;
+    let roa = roa_wizard::get_roa_data_combined(registry_root, |warn|{
+        eprintln!("Warning during ROA data generation: {}", warn);
+        roa_wizard::WarningAction::ActionContinue
+    }).map_err(|x| format!("Error generating roa: {}", x))?;
 
     let mut result = Vec::new();
-    for item in roa4.iter().chain(roa6.iter()) {
+    for item in roa.object_list().iter() {
         let ip_addr = item.prefix.first_address();
         let prefix_length = item.prefix.network_length();
         let prefix = Prefix::new(ip_addr, prefix_length)?;

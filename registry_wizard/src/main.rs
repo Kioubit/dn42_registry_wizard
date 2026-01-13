@@ -1,6 +1,5 @@
 use crate::modules::registry_remove::RemovalCategory;
 use crate::modules::util::BoxResult;
-use roa_wizard_lib::{generate_bird, generate_json};
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;
@@ -21,15 +20,37 @@ fn main() {
     match cmd.subcommand() {
         Some(("roa", c)) => {
             let is_strict = *c.get_one::<bool>("strict").unwrap();
+            let warning_action = if is_strict {
+                roa_wizard::WarningAction::ActionAbort
+            } else {
+                roa_wizard::WarningAction::ActionContinue
+            };
+            let warning_handler = |warning| {
+                eprintln!("Warning: {}", warning);
+                warning_action
+            };
+
             match c.subcommand() {
                 Some(("v4", _)) => {
-                    roa_wizard_lib::check_and_output(generate_bird(base_path, false), is_strict)
+                    output_result(
+                        roa_wizard::get_roa_data(false, &base_path, warning_handler)
+                            .map(|x| x.output_bird(base_path))
+                            .map_err(Into::into),
+                    )
                 }
                 Some(("v6", _)) => {
-                    roa_wizard_lib::check_and_output(generate_bird(base_path, true), is_strict)
+                    output_result(
+                        roa_wizard::get_roa_data(true, &base_path, warning_handler)
+                            .map(|x| x.output_bird(base_path))
+                            .map_err(Into::into),
+                    )
                 }
                 Some(("json", _)) => {
-                    roa_wizard_lib::check_and_output(generate_json(base_path), is_strict)
+                    output_result(
+                        roa_wizard::get_roa_data_combined(&base_path, warning_handler)
+                            .map(|x| x.output_json())
+                            .map_err(Into::into),
+                    )
                 }
                 _ => unreachable!(),
             }

@@ -58,15 +58,18 @@ pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<
     let mut roa6 = None;
     let mut roa_json = None;
     if with_roa {
-        roa4 = roa_wizard_lib::generate_bird(&registry_root, false).map_err(|x| {
-            eprintln!("Error generating bird roa4: {:?}", x);
-        }).map(|x| x.0).ok();
-        roa6 = roa_wizard_lib::generate_bird(&registry_root, true).map_err(|x| {
-            eprintln!("Error generating bird roa6: {:?}", x);
-        }).map(|x| x.0).ok();
-        roa_json = roa_wizard_lib::generate_json(&registry_root).map_err(|x| {
-            eprintln!("Error generating roa JSON: {:?}", x);
-        }).map(|x|x.0).ok();
+        let data = roa_wizard::get_roa_data_v4v6(&registry_root, |warn| {
+            eprintln!("Warning during ROA data generation: {}", warn);
+            roa_wizard::WarningAction::ActionContinue
+        }).map_err(|err| {
+            eprintln!("Warning during ROA data generation: {}", err);
+        }).ok();
+        if let Some((mut v4, v6)) = data {
+            roa4 = Some(v4.output_bird(&registry_root));
+            roa6 = Some(v6.output_bird(&registry_root));
+            v4.merge(v6);
+            roa_json = Some(v4.output_json());
+        }
     }
 
     let mut app_state_lock = app_state.write().unwrap();
