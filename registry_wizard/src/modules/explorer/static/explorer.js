@@ -440,19 +440,32 @@ searchBox.oninput = () => {
         perform_search(searchBox.value).then();
     }, 150);
 };
+document.addEventListener("keydown", (ev) => {
+    if (ev.key === "/") {
+        if (searchBox !== document.activeElement) {
+            ev.preventDefault();
+            searchBox.focus();
+            searchBox.select();
+        }
+    }
+});
 
 moreInfoLink.onclick = async () => {
     const inner = document.getElementById("infoDialogInner");
+    const inner_wait = document.getElementById("infoDialogWait");
     const inner_additional = document.getElementById("infoDialogAdditional");
     const close = document.getElementById("infoDialogCloseButton");
-    inner.innerText = "Please wait...";
     infoDialog.showModal();
     close.onclick = () => {
         infoDialog.close();
     };
+    inner_wait.classList.remove("noDisplay");
     await fetch_index();
+    inner_wait.classList.add("noDisplay");
     const with_roa = info["roa"];
-    inner.innerText = `Registry git commit hash: ${info["commit"]}\nGeneration time: ${info["time"]}\nROA data generation enabled: ${with_roa}`;
+    inner.querySelector('[data-commit]').textContent = info["commit"];
+    inner.querySelector('[data-time]').textContent = new Date(info["time"] * 1000).toLocaleString();
+    inner.querySelector('[data-roa]').textContent = with_roa;
     if (with_roa) {
         inner_additional.classList.remove("noDisplay");
     } else {

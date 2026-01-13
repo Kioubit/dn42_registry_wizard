@@ -73,6 +73,11 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
     let addr = SocketAddr::from((IpAddr::from(Ipv6Addr::UNSPECIFIED), port));
     let listener = tokio::net::TcpListener::bind(&addr).await
         .map_err(|x| format!("Error listening on TCP: {}", x))?;
+    eprintln!("Starting server on port {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update", port);
+    if !app_state.read().unwrap().roa_disabled {
+        eprintln!("ROA data endpoints: '/api/roa/v4/', '/api/roa/v6/', '/api/roa/json/'");
+    }
+
     let app = Router::new()
         .route("/", get(handlers::root_handler))
         .route("/{*path}", get(handlers::root_handler))
@@ -83,8 +88,6 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
         .route("/api/roa/json/", get(handlers::roa_handler_json))
         .with_state(app_state);
 
-    eprintln!("Starting server on port {}. Send the POSIX 'SIGUSR1' signal to this process to trigger data update", port);
-    eprintln!("ROA data endpoints: ['/api/roa/v4/', '/api/roa/v6/', '/api/roa/json/']");
     axum::serve(listener, app).with_graceful_shutdown(async move {
         loop {
             match sig_chan_rx.recv().await.unwrap() {

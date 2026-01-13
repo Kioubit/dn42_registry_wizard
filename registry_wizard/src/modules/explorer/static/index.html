@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>DN42 registry explorer</title>
+    <script defer src="explorer.js"></script>
     <style>
         body {
             overflow-y: scroll;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
         .noDisplay {
@@ -83,14 +85,6 @@
             padding-right: 0.5em;
         }
 
-        #searchBox {
-            font-size: 1.2em;
-            height: 2em;
-            max-width: 28em;
-            width: 100%;
-            min-width: 10em;
-        }
-
         @media only screen and (max-width: 900px) {
             #title {
                 order: 0 !important;
@@ -115,7 +109,7 @@
             justify-content: center;
         }
 
-        #showMoreBtnDiv {
+        .showMoreBtnDiv {
             margin-top: 0.3em;
         }
 
@@ -128,8 +122,46 @@
         }
 
         #searchBoxOuter {
-            max-width: 100%;
+            width: 100%;
+            max-width: 28em;
             flex: 1;
+            position: relative;
+        }
+
+        #searchBoxOuter kbd {
+            position: absolute;
+            right: 8px;
+
+            top: 0;
+            bottom: 0;
+            margin-top: auto;
+            margin-bottom: auto;
+            height: fit-content;
+            line-height: 1;
+
+            background-color: #eee;
+            border: 1px solid #999;
+            border-radius: 3px;
+            padding: 2px 5px;
+            font-size: 0.9em;
+            font-family: monospace;
+            color: #333;
+            pointer-events: none;
+        }
+        #searchBox:focus + kbd,
+        #searchBox:not(:placeholder-shown) + kbd {
+            display: none;
+        }
+        @media (max-width: 600px) {
+            #searchBoxOuter kbd { display: none; }
+        }
+
+        #searchBox {
+            font-size: 1.2em;
+            height: 2em;
+            width: 100%;
+            min-width: 10em;
+            box-sizing: border-box;
         }
 
         .word-break-all {
@@ -172,6 +204,7 @@
         </div>
         <div id="searchBoxOuter">
             <input id="searchBox" type="search" placeholder="Search here...">
+            <kbd>/</kbd>
         </div>
     </div>
 </div>
@@ -208,13 +241,24 @@
     </div>
 </div>
 <dialog id="infoDialog">
-    <div id="infoDialogInner" class="word-break-all"></div>
+    <div id="infoDialogWait" class="noDisplay">Please wait...</div>
+    <div id="infoDialogInner" class="word-break-all">
+        <div>Registry git commit hash: <code data-commit></code></div>
+        <div>Generation time: <span data-time></span></div>
+        <div>ROA data generation enabled: <span data-roa></span></div>
+    </div>
     <div id="infoDialogAdditional">
         <hr>
-        ROA data endpoints: ['/api/roa/v4/', '/api/roa/v6/', '/api/roa/json/']
+        ROA data endpoints:
+        <ul>
+            <li><a href="api/roa/v4/">/api/roa/v4/</a></li>
+            <li><a href="api/roa/v6/">/api/roa/v6/</a></li>
+            <li><a href="api/roa/json/">/api/roa/json/</a></li>
+        </ul>
     </div>
+    <hr>
+    <a href="https://github.com/Kioubit/dn42_registry_wizard">Source code</a>
     <button id="infoDialogCloseButton">Close</button>
 </dialog>
 </body>
-<script src="explorer.js"></script>
 </html>

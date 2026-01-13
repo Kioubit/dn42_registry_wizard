@@ -141,7 +141,7 @@ where
     let mut object_list: RegistryGraph<M, T, L> = HashMap::new();
 
     for schema in registry_schema {
-        eprintln!("Reading {:?}", &("data/".to_owned() + &schema.dir_name));
+        eprintln!("Reading {}", &("data/".to_owned() + &schema.dir_name));
         let objects = read_registry_objects(registry_root, Path::new(&("data/".to_owned() + &schema.dir_name)), false);
         if objects.is_err() {
             eprintln!("Error accessing directory referred to by schema: {}", schema.dir_name);
@@ -160,7 +160,7 @@ where
         }
     }
 
-
+    eprintln!("Establishing links");
     // Establish links
     for object in object_list.values().flatten() {
         // For each object regardless of category
@@ -238,6 +238,8 @@ where
             }
         }
     }
+
+    eprintln!("Registry graph built");
 
     Ok(object_list)
 }

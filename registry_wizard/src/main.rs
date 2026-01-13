@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 use crate::modules::registry_remove::RemovalCategory;
 use crate::modules::util::BoxResult;
 use std::io;
