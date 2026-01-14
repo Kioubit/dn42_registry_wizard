@@ -68,9 +68,7 @@ pub fn output(registry_root: &Path, v4: bool) -> BoxResult<String> {
             cidr.borrow().cidr.eq(&IpCidr::from_str("::/0").unwrap())).
         ok_or("could not find root element")?;
 
-
-    let j = serde_json::to_string(&root)?;
-    Ok(j)
+    Ok(serde_json::to_string(&root)? + "\n")
 }
 
 fn is_in_subnet(target: IpCidr, test: IpCidr) -> bool {

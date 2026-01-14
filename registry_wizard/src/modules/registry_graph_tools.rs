@@ -26,7 +26,7 @@ pub fn output_list(registry_root: &Path, obj_type: Option<String>, object_name: 
                     if graphviz {
                         Ok(create_graphviz(v.to_vec(), None)?)
                     } else {
-                        Ok(serde_json::to_string(v)?)
+                        Ok(serde_json::to_string(v)? + "\n")
                     }
                 }
                 Some(n) => {
@@ -37,7 +37,7 @@ pub fn output_list(registry_root: &Path, obj_type: Option<String>, object_name: 
                         .ok_or("object type not found")?
                         .iter().find(|x| x.object.filename == n)
                         .ok_or("object by name not found");
-                    Ok(serde_json::to_string(r)?)
+                    Ok(serde_json::to_string(r)? + "\n")
                 }
             }
         }
@@ -117,7 +117,7 @@ pub fn output_related(registry_root: &Path, obj_type: String,
     let result: Vec<_> = visited.iter()
         .map(|x| format!("{}/{}", x.schema_ref, x.object.filename))
         .collect();
-    Ok(serde_json::to_string(&result)?)
+    Ok(serde_json::to_string(&result)?+"\n")
 }
 
 
@@ -185,5 +185,5 @@ pub fn output_path(registry_root: &Path, src_type: String, tgt_type: String,
 
     Ok(rev_path.iter().rev()
         .map(|x| format!("{}/{}", x.schema_ref, x.object.filename.clone()))
-        .collect::<Vec<String>>().join(" > "))
+        .collect::<Vec<String>>().join(" > ") + "\n")
 }

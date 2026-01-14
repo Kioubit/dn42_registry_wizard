@@ -231,7 +231,7 @@ fn main() {
 fn output_result(result: BoxResult<String>) {
     match result {
         Ok(s) => {
-            writeln!(io::stdout(), "{}", s).ok()
+            write!(io::stdout(), "{}", s).ok()
         }
         Err(err) => {
             writeln!(io::stderr(), "{}", err).ok();

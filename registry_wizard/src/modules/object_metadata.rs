@@ -23,5 +23,5 @@ pub fn output(registry_root: &Path, object_type: &str,
         }
         objects.insert(item.filename, item.key_value);
     }
-    Ok(serde_json::to_string(&objects)?)
+    Ok(serde_json::to_string(&objects)? + "\n")
 }

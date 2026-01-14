@@ -37,7 +37,7 @@ pub fn output(registry_root: &Path, search_ip: &str) -> BoxResult<String> {
     if let Some(current) = current {
         let target_path = Path::new(registry_root).join(sub_path).join(current);
         let key_value = read_registry_object_kv::<SimpleObjectLine>(target_path.as_path())?;
-        Ok(serde_json::to_string(&key_value)?)
+        Ok(serde_json::to_string(&key_value)? + "\n")
     } else {
         Err("Failed to find target".into())
     }
