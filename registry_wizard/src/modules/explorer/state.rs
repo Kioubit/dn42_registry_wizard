@@ -12,6 +12,7 @@ pub(super) struct AppState {
     pub objects: HashMap<String, Vec<WebRegistryObject>>,
     pub index: HashMap<String, Vec<String>>,
     pub etag: String,
+    pub generation_time: String,
     pub commit_hash: String,
     pub roa4: Option<String>,
     pub roa6: Option<String>,
@@ -76,6 +77,7 @@ pub(super) async fn update_registry_data(registry_root: PathBuf, app_state: Arc<
     app_state_lock.objects = graph_web;
     app_state_lock.index = index_map;
     app_state_lock.etag = format!("\"{}\"", get_current_unix_time());
+    app_state_lock.generation_time = get_current_unix_time().to_string();
     app_state_lock.commit_hash = commit_hash;
     app_state_lock.roa4 = roa4;
     app_state_lock.roa6 = roa6;

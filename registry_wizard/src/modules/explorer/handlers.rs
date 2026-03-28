@@ -25,7 +25,7 @@ pub(super) async fn index_handler(request_headers: HeaderMap, State(u): State<Ar
     let mut m  = serde_json::map::Map::new();
     m.insert("commit".to_string(), serde_json::to_value(&u.commit_hash).unwrap_or_default());
     m.insert("roa".to_string(), serde_json::to_value(!u.roa_disabled).unwrap_or_default());
-    m.insert("time".to_string(), serde_json::to_value(&u.etag).unwrap_or_default());
+    m.insert("time".to_string(), serde_json::to_value(&u.generation_time).unwrap_or_default());
     let info_val = serde_json::to_value(&m).unwrap_or_default();
     let jr = serde_json::to_value(&u.index);
     if jr.is_err() {
