@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::channel;
+use tower_http::compression::CompressionLayer;
 use crate::modules::explorer::state::AppState;
 use crate::modules::util::os_signals::{signal_listener, CustomSignal};
 
@@ -79,10 +80,10 @@ async fn start_server(app_state: Arc<RwLock<AppState>>, port: u16, mut sig_chan_
     }
 
     let app = Router::new()
-        .route("/", get(handlers::root_handler))
-        .route("/{*path}", get(handlers::root_handler))
-        .route("/api/index/", get(handlers::index_handler))
-        .route("/api/object/", get(handlers::get_object))
+        .route("/", get(handlers::root_handler).layer(CompressionLayer::new()))
+        .route("/{*path}", get(handlers::root_handler).layer(CompressionLayer::new()))
+        .route("/api/index/", get(handlers::index_handler).layer(CompressionLayer::new()))
+        .route("/api/object/", get(handlers::get_object).layer(CompressionLayer::new()))
         .route("/api/roa/v4/", get(handlers::roa_handler_v4))
         .route("/api/roa/v6/", get(handlers::roa_handler_v6))
         .route("/api/roa/json/", get(handlers::roa_handler_json))

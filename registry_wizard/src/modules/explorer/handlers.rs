@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use axum::extract::{Query, State};
-use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use crate::modules::explorer::{static_files, AppState};
 
-pub(super) async fn root_handler(uri: Uri) -> impl IntoResponse {
+pub(super) async fn root_handler(request_headers: HeaderMap, uri: Uri) -> impl IntoResponse {
     let mut path = uri.path().trim_start_matches('/').to_owned();
     if path.is_empty() {
         path = String::from("index.html");
     }
-    static_files::StaticFile(path)
+    static_files::StaticFile { path, if_none_match: request_headers.get(header::IF_NONE_MATCH).cloned()}
 }
 
 pub(super) async fn index_handler(request_headers: HeaderMap, State(u): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
