@@ -35,16 +35,6 @@ pub(in crate::modules) async fn signal_listener(sig_chan_tx: broadcast::Sender<C
     Ok(())
 }
 
-#[cfg(windows)]
-pub(in crate::modules) async fn signal_listener(sig_chan_tx: broadcast::Sender<CustomSignal>) -> BoxResult<()>{
-    select! {
-            _ = terminate_signal() => {
-                sig_chan_tx.send(CustomSignal::Shutdown).unwrap();
-            }
-    }
-    Ok(())
-}
-
 #[cfg(unix)]
 pub(in crate::modules) async fn terminate_signal() {
     use tokio::signal::unix::{signal, SignalKind};
@@ -54,11 +44,4 @@ pub(in crate::modules) async fn terminate_signal() {
         _ = sigterm.recv() => (),
         _ = sigint.recv() => ()
     }
-}
-
-#[cfg(windows)]
-pub(in crate::modules) async fn terminate_signal() {
-    use tokio::signal::windows::ctrl_c;
-    let mut ctrl_c = ctrl_c().unwrap();
-    let _ = ctrl_c.recv().await;
 }
