@@ -59,7 +59,7 @@ where F: WarningHandler
         }
     }
 
-    set.sort_by(|a, b| a.priority.cmp(&b.priority));
+    set.sort_by_key(|a| a.priority);
     Ok(set)
 }
 

@@ -68,7 +68,7 @@ pub fn output_forward_zones_legacy(registry_root: &Path, auth_servers: Vec<Strin
                     .map_err(|e| format!("Could not parse provided authoritative server IP '{}' : {}", s, e))
             }).collect::<Result<Vec<String>, String>>()?
         } else {
-            object.n_server_v4.into_iter().chain(object.n_server_v6.into_iter()).collect()
+            object.n_server_v4.into_iter().chain(object.n_server_v6).collect()
         };
         for auth_server in current_auth_servers {
             if first {
