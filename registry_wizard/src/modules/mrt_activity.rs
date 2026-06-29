@@ -1,9 +1,9 @@
 use crate::modules::util;
 use crate::modules::util::BoxResult;
-use bgpkit_parser::{BgpkitParser, MrtUpdate};
+use bgpkit_parser::BgpkitParser;
 use rayon::prelude::*;
-use std::collections::HashMap;
 use std::cmp;
+use std::collections::HashMap;
 
 pub fn output(mrt_root: String, cutoff_time: u64, output_as_list: bool) -> BoxResult<String> {
     let active_asn = get_active_asn_list(mrt_root, cutoff_time)?;
@@ -51,31 +51,19 @@ fn analyze_mrt_file(path: &str, acc_map: &mut HashMap<u32, u64>, cutoff_time: u6
     let parser = BgpkitParser::new(path)?;
     let mut had_record = false;
 
-    let mut process_entry = |attributes: &bgpkit_parser::models::Attributes, timestamp: u64| {
-        if let Some(path) = attributes.as_path() {
-            for origin in path.iter_origins() {
-                acc_map.entry(origin.to_u32())
-                    .and_modify(|t| *t = cmp::max(*t, timestamp))
-                    .or_insert(timestamp);
-            }
-        }
-    };
-
-
-    for update in parser.into_update_iter() {
+    for route_elem in parser.into_route_iter() {
         had_record = true;
-        let timestamp = update.timestamp() as u64;
+        let timestamp = route_elem.timestamp as u64;
         if timestamp < cutoff_time {
             // Each RIB dump file only contains records from the same timestamp
             break;
         }
-        match update {
-            MrtUpdate::TableDumpMessage(m) => process_entry(&m.attributes, timestamp),
-            MrtUpdate::Bgp4MpUpdate(u) => process_entry(&u.message.attributes, timestamp),
-            MrtUpdate::TableDumpV2Entry(e) => {
-                for entry in e.rib_entries {
-                    process_entry(&entry.attributes,timestamp);
-                }
+
+        if let Some(path) = route_elem.as_path {
+            for origin in path.iter_origins() {
+                acc_map.entry(origin.to_u32())
+                    .and_modify(|t| *t = cmp::max(*t, timestamp))
+                    .or_insert(timestamp);
             }
         }
     }
