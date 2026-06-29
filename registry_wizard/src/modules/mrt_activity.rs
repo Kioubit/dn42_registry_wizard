@@ -28,7 +28,10 @@ fn get_active_asn_list(mrt_root: String, cutoff_time: u64) -> BoxResult<HashMap<
                 path.to_str().unwrap_or_default(),
                 &mut local_map,
                 cutoff_time,
-            )?;
+            ).map_err(|e| {
+                eprintln!("Error processing {}: {}", path.display(), e);
+                e
+            })?;
             Ok(local_map)
         }).try_reduce(HashMap::new, |mut acc, map| {
             for (t_asn, t_time) in map {
