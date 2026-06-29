@@ -5,22 +5,22 @@ edition = "2024"
 
 [dependencies]
 roa_wizard = { path = "../roa_wizard" }
-cidr-utils = "0.6.2"
+cidr-utils = "0.7.1"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
-serde_json = "1.0.149"
+serde_json = "1.0.150"
 bgpkit-parser = { version = "0.17.0", default-features = false, features = ["parser", "oneio"] }
-rayon = "1.11.0"
-clap = "4.6.0"
+rayon = "1.12.0"
+clap = "4.6.1"
 dot = "0.1.4"
 
-tokio = { version = "1.50.0", features = ["rt-multi-thread", "signal"], optional = true }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "signal"], optional = true }
 
-axum = { version = "0.8.8", optional = true }
+axum = { version = "0.8.9", optional = true }
 rust-embed = { version = "8.11.0", optional = true }
 mime_guess = { version = "2.0.5", optional = true }
-tower-http = { version = "0.6.8", features = ["compression-br", "compression-gzip"], optional = true }
+tower-http = { version = "0.7.0", features = ["compression-br", "compression-gzip"], optional = true }
 
-rpki = {version = "0.19.2", features = ["rtr", "crypto"], optional = true}
+rpki = {version = "0.19.3", features = ["rtr", "crypto"], optional = true}
 tokio-stream = { version = "0.1.18" , features = ["net"], optional = true}
 futures-util = { version = "0.3.32", optional = true }
 

@@ -6,7 +6,7 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cidr-utils = "0.6.2"
+cidr-utils = "0.7.1"
 json = "0.12.4"
 
 [[bin]]
