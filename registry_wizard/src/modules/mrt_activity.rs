@@ -1,9 +1,9 @@
 use crate::modules::util;
 use crate::modules::util::BoxResult;
 use bgpkit_parser::BgpkitParser;
-use rayon::prelude::*;
 use std::cmp;
 use std::collections::HashMap;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 pub fn output(mrt_root: String, cutoff_time: u64, output_as_list: bool) -> BoxResult<String> {
     let active_asn = get_active_asn_list(mrt_root, cutoff_time)?;
