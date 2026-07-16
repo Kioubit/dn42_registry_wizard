@@ -51,7 +51,7 @@ impl<'a> dot::Labeller<'a, Nd, Ed> for Graph {
     fn graph_id(&'a self) -> dot::Id<'a> { dot::Id::new("graph1").unwrap() }
 
     fn node_id(&'a self, n: &Nd) -> dot::Id<'a> {
-        let name = format!("{}/{}", &n.schema_ref ,&n.object.filename);
+        let name = format!("{}/{}", n.schema_ref ,n.object.filename);
         let f = name.as_bytes().iter().fold(String::new(), |mut acc, &x| {
             acc.push_str(&format!("{:02x}", x));
             acc

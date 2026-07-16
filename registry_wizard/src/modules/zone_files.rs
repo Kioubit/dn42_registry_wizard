@@ -6,7 +6,7 @@ use std::net::IpAddr;
 use std::path::Path;
 use std::str::FromStr;
 
-static STATIC_ENTRIES: [(&str, &str); 7] = [
+const STATIC_ENTRIES: &[(&str, &str)] = &[
     ("20.172.in-addr.arpa", "inetnum/172.20.0.0_16"),
     ("21.172.in-addr.arpa", "inetnum/172.21.0.0_16"),
     ("22.172.in-addr.arpa", "inetnum/172.22.0.0_16"),
@@ -247,7 +247,7 @@ fn read_tld_objects(registry_root: &Path, show_nameserver_note: bool) -> BoxResu
     }
 
     for entry in STATIC_ENTRIES {
-        tld_objects.push(get_static_entry(registry_root, entry, show_nameserver_note)?);
+        tld_objects.push(get_static_entry(registry_root, *entry, show_nameserver_note)?);
     }
 
     Ok(tld_objects)
