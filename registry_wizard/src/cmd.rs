@@ -198,6 +198,12 @@ pub fn get_arg_matches() -> ArgMatches {
                         .value_parser(clap::value_parser!(u32))
                         .default_value("600")
                         .help("RTR retry timing"),
+                    Arg::new("history-size")
+                        .long("history")
+                        .value_parser(clap::value_parser!(usize))
+                        .default_value("4")
+                        .help("Number of historical VRP generations \
+                        to retain for serving RTR diff queries to routers with stale sessions"),
                 ]),
             Command::new("remove")
                 .about("Safely remove a list of registry objects along with all their dependencies")
